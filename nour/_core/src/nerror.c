@@ -81,6 +81,12 @@ NError_Print() {
     printf("%s: %s\n", type_str, __NR_NERROR_GLOBAL_ERROR_VAR__.context);
 }
 
+NR_PUBLIC void
+NError_Clear() {
+    __NR_NERROR_GLOBAL_ERROR_VAR__.type = NError_NoError;
+    __NR_NERROR_GLOBAL_ERROR_VAR__.context[0] = '\0';
+}
+
 NR_PUBLIC void* 
 NError_RaiseErrorNoContext(NError_Type type) {
     __NR_NERROR_GLOBAL_ERROR_VAR__.type = type;

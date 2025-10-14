@@ -12,6 +12,9 @@ NError_RaiseError(NError_Type type, const char *format, ...);
 NR_PUBLIC void 
 NError_Print();
 
+NR_PUBLIC void
+NError_Clear();
+
 NR_PUBLIC void* 
 NError_RaiseErrorNoContext(NError_Type type);
 
