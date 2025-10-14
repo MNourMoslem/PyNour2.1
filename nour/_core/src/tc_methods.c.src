@@ -1,0 +1,270 @@
+/******************************************************************************
+ * File: tc_methods.c.src
+ * 
+ * Purpose:
+ * This file provides a general-purpose framework for handling type conversion
+ * between nodes of various data types within a numerical computation library. 
+ * It ensures that data can be accurately and efficiently converted between 
+ * nodes while maintaining shape consistency. The implementation uses templates 
+ * to support a wide range of data type combinations and optimizes the process 
+ * based on memory layout.
+ * 
+ * Overview:
+ * The file defines type-conversion functions and supporting utilities for:
+ *   1. Validating that the source (`src`) and destination (`dst`) nodes share 
+ *      the same shape.
+ *   2. Converting data from one type to another using templates for maximum 
+ *      flexibility.
+ *   3. Optimizing conversion for memory-contiguous nodes while supporting 
+ *      non-contiguous nodes via iterators.
+ *   4. Error reporting for shape or data type mismatches.
+ * 
+ * Templates:
+ * To support a variety of data types, the file uses placeholders replaced 
+ * during compilation for each type-specific combination:
+ *   - %ST%: Source node type (e.g., NR_INT32, NR_FLOAT64).
+ *   - %DT%: Destination node type (e.g., NR_UINT32, NR_COMPLEX128).
+ *   - %NST%: Variable type of an individual source item (e.g., nr_int32).
+ *   - %NDT%: Variable type of an individual destination item (e.g., nr_float64).
+ * 
+ * Key Components:
+ * 1. **Error Handling**:
+ *    - `_TC_RAISE_MISS_SHAPE`: Raises an error if the source and destination 
+ *      nodes do not share the same shape.
+ *    - `_TC_RAISE_MISS_DTYPE`: Raises an error if the source and destination 
+ *      nodes have incompatible data types.
+ * 
+ * 2. **Type Conversion**:
+ *    - `Node_TypeConvert_%ST%_to_%DT%`: Implements the element-wise data 
+ *      conversion logic, optimized for contiguous and non-contiguous memory.
+ * 
+ * 3. **Method Registration**:
+ *    - `__NODE_TC_METHODS_ARRAY__`: Contains all type-conversion methods 
+ *      registered in the library for different data type combinations.
+ * 
+ * Implementation Details:
+ * - The file ensures shape compatibility before performing type conversion. 
+ *   This is achieved by calling the `_TC_RAISE_MISS_SHAPE` function if the 
+ *   shapes differ.
+ * - Memory layout is checked to optimize iteration:
+ *   - **Contiguous Nodes**: Data is accessed directly in a loop.
+ *   - **Non-Contiguous Nodes**: `NIter` is used to iterate through node items.
+ * - The destination node (`dst`) is allocated dynamically if NULL is passed.
+ * 
+ * Function Documentation:
+ * 
+ * 1. `_TC_RAISE_MISS_SHAPE`
+ *    - Raises a `ValueError` if the source and destination nodes have 
+ *      mismatched shapes.
+ *    - Parameters:
+ *      - `dst`: Destination node.
+ *      - `src`: Source node.
+ *    - Error Message: Includes a string representation of both shapes.
+ * 
+ * 2. `_TC_RAISE_MISS_DTYPE`
+ *    - Raises a `ValueError` if the source and destination nodes have 
+ *      incompatible data types.
+ *    - Parameters:
+ *      - `dt`: Data type of the destination node.
+ *      - `st`: Data type of the source node.
+ *    - Error Message: Includes string representations of the data types.
+ * 
+ * 3. `Node_TypeConvert_%ST%_to_%DT%`
+ *    - Performs element-wise conversion from a source node to a destination 
+ *      node with a different data type.
+ *    - Parameters:
+ *      - `dst`: Destination node. If NULL, a new node is created.
+ *      - `src`: Source node containing the data to convert.
+ *    - Returns:
+ *      - The destination node (`dst`) after conversion.
+ *      - NULL if an error occurs (e.g., shape mismatch).
+ *    - Behavior:
+ *      - Allocates a new destination node if `dst` is NULL.
+ *      - Optimizes the conversion for memory-contiguous nodes.
+ *      - Uses `NIter` for iterating through non-contiguous nodes.
+ * 
+ * 4. `__NODE_TC_METHODS_ARRAY__`
+ *    - Registers all type-conversion methods for supported source and 
+ *      destination data type combinations.
+ *    - Enables dynamic selection of the appropriate conversion function.
+ * 
+ * Example Workflow:
+ * The following steps outline a typical type-conversion process:
+ *   1. Ensure the `src` and `dst` nodes are valid.
+ *   2. Call the appropriate type-conversion function, e.g., 
+ *      `Node_TypeConvert_NR_INT32_to_NR_FLOAT64`.
+ *   3. Handle any errors raised due to shape or data type mismatches.
+ *   4. Use the returned destination node for further computation.
+ * 
+ * Performance Considerations:
+ * - **Contiguous Memory**: Offers faster execution due to direct memory access.
+ * - **Non-Contiguous Memory**: Introduces overhead due to iterator usage but 
+ *   maintains flexibility for complex layouts.
+ * - Efficient handling of large datasets depends on the memory layout of the 
+ *   source and destination nodes.
+ * 
+ * Limitations:
+ * - Shape mismatches must be resolved before calling type-conversion 
+ *   functions. This library does not perform shape broadcasting.
+ * - Custom data types require additional template definitions and registration.
+ * 
+ * License:
+ * This file is part of a PyNour library and is subject to the 
+ * library's licensing terms.
+ ******************************************************************************/
+
+//Template//
+#include "nour/nour.h"
+#include "../../niter.h"
+#include "../../node_core.h"
+#include "../../nerror.h"
+
+/**
+ * Raises an error if the source and destination nodes do not have the same shape.
+ *
+ * Parameters:
+ *   - dst: The destination node.
+ *   - src: The source node.
+ *
+ * Error Raised:
+ *   - ValueError: Includes the shapes of both nodes in the error message.
+ */
+NR_STATIC void
+_TC_RAISE_MISS_SHAPE(Node* dst, const Node* src){
+    char dshp[30];
+    char sshp[30];
+
+    NTools_ShapeAsString(dst->shape, dst->ndim, dshp);
+    NTools_ShapeAsString(src->shape, src->ndim, sshp);
+
+    NError_RaiseError(
+        NError_ValueError,
+        "destenation node has to have the same shape as src node. got %s and %s",
+        dshp, sshp
+    );
+}
+
+/**
+ * Raises an error if the source and destination nodes have different data types.
+ *
+ * Parameters:
+ *   - dt: The destination node data type.
+ *   - st: The source node data type.
+ *
+ * Error Raised:
+ *   - ValueError: Includes the data types of both nodes in the error message.
+ */
+NR_STATIC void
+_TC_RAISE_MISS_DTYPE(NR_DTYPE dt, NR_DTYPE st){
+    char dtstr[30];
+    char ststr[30];
+
+    NDtype_AsStringOnlyType(dt, dtstr);
+    NDtype_AsStringOnlyType(st, ststr);
+    
+    NError_RaiseError(
+        NError_ValueError,
+        "destenation and src nodes must have the same dtype. got %s and %s",
+        dtstr, ststr
+    );
+}
+
+
+//Template//
+/**
+ * Converts data from a source node with type to a destination node with type %DT% and performs type casting.
+ *
+ * Parameters:
+ *   - dst: The destination node with type %DT%. If NULL, a new node is created.
+ *   - src: The source node with type %ST% containing the data to be converted.
+ *
+ * Behavior:
+ *   - Ensures the source (`src`) and destination (`dst`) nodes share the same shape.
+ *   - Allocates a new destination node if `dst` is NULL.
+ *   - Optimizes conversion for memory-contiguous nodes. Uses `NIter` for non-contiguous memory.
+ *   - Performs type casting from `%ST%` to `%DT%` during the data transfer.
+ *
+ * Return:
+ *   - A pointer to the destination node (`dst`) after conversion.
+ *   - NULL if an error occurs (e.g., shape mismatch, memory allocation failure).
+ */
+//Template//
+NR_STATIC Node*
+Node_TypeConvert_%ST%_to_%DT%(Node* dst, const Node* src){
+    if (!dst){
+        dst = Node_NewEmpty(src->ndim, src->shape, %DT%);
+        if (!dst){
+            return NULL;
+        }
+    }
+    else if (!Node_SameShape(dst, src)){
+        _TC_RAISE_MISS_SHAPE(dst, src);
+        return NULL;
+    }
+    else if (dst->dtype.dtype != %DT%){
+        _TC_RAISE_MISS_DTYPE(dst->dtype.dtype, %DT%);
+        return NULL;
+    }
+
+    int dcon = NODE_IS_CONTIGUOUS(dst);
+    int scon = NODE_IS_CONTIGUOUS(src);
+
+    if (dcon && scon){
+        nr_size_t nitems = Node_NItems(dst);
+        for (nr_size_t i = 0; i < nitems; i++){
+            *((%NDT%*)dst->data + i) = (%NDT%)*((%NST%*)src->data + i);
+        }
+    }
+    else if (dcon | scon){
+        if (dcon){
+            NIter it;
+            NIter_FromNode(&it, src, NITER_MODE_STRIDED);
+            NIter_ITER(&it);
+            int i = 0;
+            while (NIter_NOTDONE(&it))
+            {
+                *((%NDT%*)dst->data + i) = (%NDT%)*((%NST%*)NIter_ITEM(&it));
+                i++;
+                NIter_NEXT(&it);
+            }
+        }
+        else{
+            NIter it;
+            NIter_FromNode(&it, src, NITER_MODE_STRIDED);
+            NIter_ITER(&it);
+            int i = 0;
+            while (NIter_NOTDONE(&it))
+            {
+                *((%NDT%*)NIter_ITEM(&it)) = (%NDT%)*((%NST%*)src->data + i);
+                i++;
+                NIter_NEXT(&it);
+            }
+        }
+        
+    }
+    else{
+        NIter dit;
+        NIter sit;
+        NIter_FromNode(&dit, src, NITER_MODE_STRIDED);
+        NIter_FromNode(&sit, src, NITER_MODE_STRIDED);
+        NIter_ITER(&dit);
+        NIter_ITER(&sit);
+        while (NIter_NOTDONE(&sit))
+        {
+            *((%NDT%*)NIter_ITEM(&dit)) = (%NDT%)*((%NST%*)NIter_ITEM(&sit));
+            NIter_NEXT(&dit);
+            NIter_NEXT(&sit);
+        }
+    }
+
+    return dst;
+}
+
+//Template//
+/**
+ * Registers the type-conversion methods for all supported source and destination data types.
+ *
+ * This array contains function pointers to the type-conversion functions,
+ * parameterized by source and destination data types.
+ */
+Node2NodeFunc __NODE_TC_METHODS_ARRAY__[] = {%METHODS%};

@@ -1,0 +1,7 @@
+#ifndef NR__CORE__TESTS__COMMEN_H
+#define NR__CORE__TESTS__COMMEN_H
+
+
+
+
+#endif // NR__CORE__TESTS__COMMEN_H
