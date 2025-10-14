@@ -46,4 +46,7 @@ typedef struct
 */
 extern NError __NR_NERROR_GLOBAL_ERROR_VAR__;
 
+#define NERROR_CONTEXT __NR_NERROR_GLOBAL_ERROR_VAR__.context
+#define NERROR_TYPE __NR_NERROR_GLOBAL_ERROR_VAR__.type
+
 #endif // NR__CORE__INCLUDE__NOUR__NR_ERROR_H
