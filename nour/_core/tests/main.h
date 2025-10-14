@@ -20,5 +20,6 @@ static void run_test(const char* test_name, int num_of_tests, test_callback_t* t
 }
 
 void test_allocation_test();
+void test_shape_test();
 
 #endif // NR__CORE__TESTS__MAIN_H
