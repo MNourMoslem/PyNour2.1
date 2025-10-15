@@ -58,16 +58,16 @@ _NError_TypeAsString(NError_Type type, char* trg_str) {
 
 NR_PUBLIC int 
 NError_IsError() {
-    return __NR_NERROR_GLOBAL_ERROR_VAR__.type != NError_NoError;
+    return NERROR_TYPE != NError_NoError;
 }
 
 NR_PUBLIC void* 
 NError_RaiseError(NError_Type type, const char *format, ...) {
-    __NR_NERROR_GLOBAL_ERROR_VAR__.type = type;
+    NERROR_TYPE = type;
 
     va_list args;
     va_start(args, format);
-    vsnprintf(__NR_NERROR_GLOBAL_ERROR_VAR__.context, 
+    vsnprintf(NERROR_CONTEXT, 
              NERROR_MAX_STRING_LEN, format, args);
     va_end(args);
 
@@ -77,19 +77,19 @@ NError_RaiseError(NError_Type type, const char *format, ...) {
 NR_PUBLIC void 
 NError_Print() {
     char type_str[30];
-    _NError_TypeAsString(__NR_NERROR_GLOBAL_ERROR_VAR__.type, type_str);
-    printf("%s: %s\n", type_str, __NR_NERROR_GLOBAL_ERROR_VAR__.context);
+    _NError_TypeAsString(NERROR_TYPE, type_str);
+    printf("%s: %s\n", type_str, NERROR_CONTEXT);
 }
 
 NR_PUBLIC void
 NError_Clear() {
-    __NR_NERROR_GLOBAL_ERROR_VAR__.type = NError_NoError;
-    __NR_NERROR_GLOBAL_ERROR_VAR__.context[0] = '\0';
+    NERROR_TYPE = NError_NoError;
+    NERROR_CONTEXT[0] = '\0';
 }
 
 NR_PUBLIC void* 
 NError_RaiseErrorNoContext(NError_Type type) {
-    __NR_NERROR_GLOBAL_ERROR_VAR__.type = type;
-    __NR_NERROR_GLOBAL_ERROR_VAR__.context[0] = '\0';
+    NERROR_TYPE = type;
+    NERROR_CONTEXT[0] = '\0';
     return NULL;
 }
