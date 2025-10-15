@@ -26,17 +26,24 @@ extern char* NR_NODE_NAME;
 #define NR_NODE_OWNDATA 0x80     // Owns its data
 #define NR_NODE_TRACK 0x100      // Memory tracking enabled
 
+
 /* Core array node structure */
 typedef struct
 {
     void* data;              // Pointer to array data
-    int ndim;                // Number of dimensions
-    nr_intp* shape;        // Array shape
-    nr_intp* strides;      // Array strides
+    void* base_data;         // Pointer to base array data
+    // the difference between data and base_data is that
+    // data may point to an offset within base_data
 
+    int ndim;                // Number of dimensions
+    nr_intp* shape;          // Array shape
+    nr_intp* strides;        // Array strides
+    
     NDtype dtype;            // Data type information
 
     void* base;              // Base array reference
+    int ref_count;           // Reference count for memory management
+
     int flags;               // Array flags
 
     // Node name for identification.
