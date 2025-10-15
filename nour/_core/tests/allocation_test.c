@@ -3,7 +3,7 @@
 #include "../src/niter.h"
 #include "../src/free.h"
 
-NR_STATIC int test_1(){
+NR_STATIC int test_basic_allocation(){
     int data[6] = {1, 2, 3, 4, 5, 6};
     nr_intp shape[2] = {2, 3};
 
@@ -30,7 +30,7 @@ NR_STATIC int test_1(){
 }
 
 
-int test_2(){
+int test_basic_copy(){
     float data[12] = {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2};
     nr_intp shape[3] = {2, 2, 3};
     Node* n1 = Node_New(data, 1, 3, shape, NR_FLOAT32);
@@ -61,7 +61,7 @@ int test_2(){
 
 void test_allocation_test(){
     run_test("Allocation Test", 2, (test_callback_t[]){
-        test_1,
-        test_2
+        test_basic_allocation,
+        test_basic_copy
     });
 }
