@@ -42,5 +42,6 @@ void test_allocation_test();
 void test_shape_test();
 void test_slice_test();
 void test_multislice_test();
+void test_refcount_test();
 
 #endif // NR__CORE__TESTS__MAIN_H

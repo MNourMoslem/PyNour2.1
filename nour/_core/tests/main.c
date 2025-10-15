@@ -5,6 +5,7 @@ int main(){
    test_shape_test();
    test_slice_test();
    test_multislice_test();
+   test_refcount_test();
 
    return 0;
 }
