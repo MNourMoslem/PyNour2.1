@@ -28,7 +28,7 @@ extern char* NR_NODE_NAME;
 
 
 /* Core array node structure */
-typedef struct
+typedef struct Node
 {
     void* data;              // Pointer to array data
     void* base_data;         // Pointer to base array data
@@ -41,7 +41,7 @@ typedef struct
     
     NDtype dtype;            // Data type information
 
-    void* base;              // Base array reference
+    struct Node* base;       // Base array reference (pointer to parent Node)
     int ref_count;           // Reference count for memory management
 
     int flags;               // Array flags
