@@ -36,6 +36,7 @@ _Node_NewInit(int ndim, NR_DTYPE dtype){
     node->ndim = ndim;
     node->dtype = NDtype_New(dtype);
     node->base = NULL;
+    node->ref_count = 1;
     node->flags = 0;
 
     return node;
@@ -107,24 +108,20 @@ Node_New(void* data_block, int copy_data, int ndim, nr_intp* shape, NR_DTYPE dty
     }
 
     if (copy_data){
-        nr_size_t data_size = nch.nitems * nch.node->dtype.size;
-        nch.node->data = malloc(data_size);
-        if (!nch.node->data) {
+        if (_Node_NewInitAndCopyData(nch.node, data_block, nch.nitems) < 0) {
             free(nch.node->shape);
             free(nch.node->strides);
             free(nch.node);
-            NError_RaiseMemoryError();
             return NULL;
         }
-        memcpy(nch.node->data, data_block, data_size);
         NR_SETFLG(nch.node->flags, NR_NODE_OWNDATA);
     }
     else{
         nch.node->data = data_block;
     }
 
+    nch.node->base_data = nch.node->data;
     NR_SETFLG(nch.node->flags, (NR_NODE_C_ORDER | NR_NODE_CONTIGUOUS | NR_NODE_WRITABLE));
-
     return nch.node;
 }
 
@@ -145,8 +142,8 @@ Node_NewEmpty(int ndim, nr_intp* shape, NR_DTYPE dtype){
         return NULL;
     }
 
+    nch.node->base_data = nch.node->data;
     NR_SETFLG(nch.node->flags, (NR_NODE_C_ORDER | NR_NODE_OWNDATA | NR_NODE_CONTIGUOUS | NR_NODE_WRITABLE));
-
     return nch.node;
 }
 
