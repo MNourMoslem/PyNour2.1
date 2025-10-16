@@ -7,5 +7,7 @@
 #include "nr_config.h"
 #include "nr_error.h"
 #include "nr_iter.h"
+#include "nr_func.h"
+#include "nr_math.h"
 
 #endif // NR__CORE__INCLUDE__NOUR_H
