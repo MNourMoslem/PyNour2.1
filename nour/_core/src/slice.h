@@ -15,4 +15,7 @@ Node_Slice(Node* node, const Slice slice, int dim);
 NR_PUBLIC int 
 Node_MultiSlice(Node* node, const Slice* slices, int num_slices);
 
+NR_PUBLIC Node*
+Node_BooleanMask(const Node* node, const Node* bool_mask);
+
 #endif // NOUR__CORE_SRC_NOUR_SLICE_H

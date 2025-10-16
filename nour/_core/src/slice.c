@@ -1,5 +1,7 @@
 #include "slice.h"
 #include "nerror.h"
+#include "node_core.h"
+#include "niter.h"
 
 int 
 Node_Slice(Node* node, const Slice slice, int dim){
@@ -134,4 +136,87 @@ Node_MultiSlice(Node* node, const Slice* slices, int num_slices){
     }
 
     return 0;
+}
+
+
+NR_PUBLIC Node*
+Node_BooleanMask(const Node* node, const Node* bool_mask){
+    if (!node || !bool_mask){
+        NError_RaiseError(NError_ValueError, "Node and boolean mask cannot be NULL.");
+        return NULL;
+    }
+
+    if (NODE_DTYPE(bool_mask) != NR_BOOL){
+        NError_RaiseError(NError_ValueError, 
+            "Boolean mask has invalid data type. Expected boolean type.");
+        return NULL;
+    }
+
+    // Both must have the same shape
+    if (!Node_SameShape(node, bool_mask)){
+        NError_RaiseError(NError_ValueError, 
+            "Node and boolean mask must have the same shape.");
+        return NULL;
+    }
+
+    // Count number of true elements in the boolean mask
+    nr_intp nitems = Node_NItems(node);
+    nr_intp true_count = 0;
+    
+    if (NODE_IS_CONTIGUOUS(bool_mask)){
+        // Fast path for contiguous boolean mask
+        char* mask_data = (char*)NODE_DATA(bool_mask);
+        for (nr_intp i = 0; i < nitems; i++){
+            if (mask_data[i]) true_count++;
+        }
+    } else {
+        // General case for strided boolean mask
+        NIter it;
+        NIter_FromNode(&it, bool_mask, NITER_MODE_STRIDED);
+        NIter_ITER(&it);
+        while (NIter_NOTDONE(&it)){
+            if (*(char*)NIter_ITEM(&it)) true_count++;
+            NIter_NEXT(&it);
+        }
+    }
+
+
+    // Create new node for the result
+    Node* result = Node_NewEmpty(1, &true_count, node->dtype.dtype);
+    if (!result){
+        NError_RaiseMemoryError();
+        return NULL;
+    }
+
+
+    // Fill the new node with selected elements
+    nr_intp bsize = NODE_ITEMSIZE(node);
+    char* src_data = (char*)NODE_DATA(node);
+    char* dst_data = (char*)NODE_DATA(result);
+
+    if (NODE_IS_CONTIGUOUS(bool_mask)){
+        // Fast path for contiguous boolean mask
+        char* mask_data = (char*)NODE_DATA(bool_mask);
+        for (nr_intp i = 0; i < nitems; i++){
+            if (mask_data[i]){
+                memcpy(dst_data, src_data, bsize);
+                dst_data += bsize;
+            }
+            src_data += bsize;
+        }
+    } else {
+        // General case for strided boolean mask
+        NIter it;
+        NIter_FromNode(&it, bool_mask, NITER_MODE_STRIDED);
+        NIter_ITER(&it);
+        while (NIter_NOTDONE(&it)){
+            if (*(char*)NIter_ITEM(&it)){
+                memcpy(dst_data, src_data, bsize);
+                dst_data += bsize;
+            }
+            NIter_NEXT(&it);
+        }
+    }
+
+    return result;
 }
