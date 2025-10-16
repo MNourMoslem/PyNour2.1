@@ -6,6 +6,7 @@ int main(){
    test_slice_test();
    test_multislice_test();
    test_refcount_test();
+   test_nmath_test();
 
    return 0;
 }
