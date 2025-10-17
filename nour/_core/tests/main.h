@@ -44,6 +44,7 @@ void test_slice_test();
 void test_multislice_test();
 void test_refcount_test();
 void test_boolean_mask_test();
+void test_tc_test();
 void test_nmath_test();
 
 #endif // NR__CORE__TESTS__MAIN_H
