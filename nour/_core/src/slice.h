@@ -9,11 +9,11 @@ typedef struct {
     nr_intp step;
 } Slice;
 
-NR_PUBLIC int 
-Node_Slice(Node* node, const Slice slice, int dim);
+NR_PUBLIC Node*
+Node_Slice(Node* nout, const Node* node, const Slice slice, int dim);
 
-NR_PUBLIC int 
-Node_MultiSlice(Node* node, const Slice* slices, int num_slices);
+NR_PUBLIC Node*
+Node_MultiSlice(Node* nout, const Node* node, const Slice* slices, int num_slices);
 
 NR_PUBLIC Node*
 Node_BooleanMask(const Node* node, const Node* bool_mask);

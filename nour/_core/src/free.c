@@ -21,8 +21,8 @@ Node_Free(Node* node){
     }
     
     // Free data if this node owns it
-    if (NODE_IS_OWNDATA(node) && node->base_data) {
-        free(node->base_data);
+    if (NODE_IS_OWNDATA(node) && node->data) {
+        free(node->data);
     }
     
     // If this node references a base, decrement base's ref count

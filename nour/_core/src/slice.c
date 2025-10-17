@@ -3,13 +3,18 @@
 #include "node_core.h"
 #include "niter.h"
 
-int 
-Node_Slice(Node* node, const Slice slice, int dim){
+NR_PUBLIC Node*
+Node_Slice(Node* nout, const Node* node, const Slice slice, int dim){
+    if (!node){
+        NError_RaiseError(NError_ValueError, "Node cannot be NULL.");
+        return NULL;
+    }
+
     if (NODE_NDIM(node) == 0 || dim < 0 || dim >= NODE_NDIM(node)){
         NError_RaiseError(NError_IndexError, 
             "Invalid dimension for slicing. got %d for array with %d dimensions.", 
             dim, NODE_NDIM(node));
-        return -1;
+        return NULL;
     }
 
     nr_intp start = slice.start;
@@ -19,7 +24,7 @@ Node_Slice(Node* node, const Slice slice, int dim){
 
     if (step == 0){
         NError_RaiseError(NError_ValueError, "Slice step cannot be zero.");
-        return -1;
+        return NULL;
     }
 
     // Normalize negative indices
@@ -40,41 +45,58 @@ Node_Slice(Node* node, const Slice slice, int dim){
         new_dim_size = (start > stop) ? ((start - stop - step - 1) / (-step)) : 0;
     }
 
-    // Calculate the offset for the new data pointer
-    nr_intp offset = start * NODE_STRIDES(node)[dim];
-    node->data = (char*)node->data + offset;
-    
-    // Update shape and strides
-    NODE_SHAPE(node)[dim] = new_dim_size;
-    NODE_STRIDES(node)[dim] *= step;
-
-    // Mark as strided if not already
-    if (!NODE_IS_STRIDED(node)){
-        NR_SETFLG(node->flags, NR_NODE_STRIDED);
-        NR_RMVFLG(node->flags, NR_NODE_CONTIGUOUS);
+    // Create output node if not provided
+    if (!nout){
+        nout = Node_CopyWithReference(node);
+        if (!nout) return NULL;
     }
 
-    return 0;
+    // Calculate the offset for the new data pointer
+    nr_intp offset = start * NODE_STRIDES(node)[dim];
+    nout->data = (char*)node->data + offset;
+    
+    // Update shape and strides
+    NODE_SHAPE(nout)[dim] = new_dim_size;
+    NODE_STRIDES(nout)[dim] = NODE_STRIDES(node)[dim] * step;
+
+    // Set base reference to source node and increment refcount
+    if (nout->base != node) {
+        nout->base = (Node*)node;
+        ((Node*)node)->ref_count++;
+    }
+
+    // Mark as not owning data and update flags
+    NR_RMVFLG(nout->flags, NR_NODE_OWNDATA);
+    NR_SETFLG(nout->flags, NR_NODE_STRIDED);
+    NR_RMVFLG(nout->flags, NR_NODE_CONTIGUOUS);
+
+    return nout;
 }
 
 
-int 
-Node_MultiSlice(Node* node, const Slice* slices, int num_slices){
-    if (node == NULL || slices == NULL){
+NR_PUBLIC Node*
+Node_MultiSlice(Node* nout, const Node* node, const Slice* slices, int num_slices){
+    if (!node || !slices){
         NError_RaiseError(NError_ValueError, "Node and slices cannot be NULL.");
-        return -1;
+        return NULL;
     }
 
     if (NODE_NDIM(node) == 0){
         NError_RaiseError(NError_IndexError, "Cannot slice a 0-dimensional array.");
-        return -1;
+        return NULL;
     }
 
     if (num_slices > NODE_NDIM(node)){
         NError_RaiseError(NError_IndexError, 
             "Too many slices: got %d slices for array with %d dimensions.", 
             num_slices, NODE_NDIM(node));
-        return -1;
+        return NULL;
+    }
+
+    // Create output node if not provided
+    if (!nout){
+        nout = Node_CopyWithReference(node);
+        if (!nout) return NULL;
     }
 
     // Calculate total offset and new shapes/strides for all dimensions
@@ -97,7 +119,7 @@ Node_MultiSlice(Node* node, const Slice* slices, int num_slices){
         if (step == 0){
             NError_RaiseError(NError_ValueError, 
                 "Slice step cannot be zero at dimension %d.", dim);
-            return -1;
+            return NULL;
         }
 
         // Normalize negative indices
@@ -122,20 +144,25 @@ Node_MultiSlice(Node* node, const Slice* slices, int num_slices){
         total_offset += start * NODE_STRIDES(node)[dim];
         
         // Update shape and stride for this dimension
-        NODE_SHAPE(node)[dim] = new_dim_size;
-        NODE_STRIDES(node)[dim] *= step;
+        NODE_SHAPE(nout)[dim] = new_dim_size;
+        NODE_STRIDES(nout)[dim] = NODE_STRIDES(node)[dim] * step;
     }
 
     // Apply the total offset to the data pointer
-    node->data = (char*)node->data + total_offset;
+    nout->data = (char*)node->data + total_offset;
 
-    // Mark as strided if not already
-    if (!NODE_IS_STRIDED(node)){
-        NR_SETFLG(node->flags, NR_NODE_STRIDED);
-        NR_RMVFLG(node->flags, NR_NODE_CONTIGUOUS);
+    // Set base reference to source node and increment refcount
+    if (nout->base != node) {
+        nout->base = (Node*)node;
+        ((Node*)node)->ref_count++;
     }
 
-    return 0;
+    // Mark as not owning data and update flags
+    NR_RMVFLG(nout->flags, NR_NODE_OWNDATA);
+    NR_SETFLG(nout->flags, NR_NODE_STRIDED);
+    NR_RMVFLG(nout->flags, NR_NODE_CONTIGUOUS);
+
+    return nout;
 }
 
 

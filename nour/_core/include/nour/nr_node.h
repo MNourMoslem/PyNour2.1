@@ -31,9 +31,6 @@ extern char* NR_NODE_NAME;
 typedef struct Node
 {
     void* data;              // Pointer to array data
-    void* base_data;         // Pointer to base array data
-    // the difference between data and base_data is that
-    // data may point to an offset within base_data
 
     int ndim;                // Number of dimensions
     nr_intp* shape;          // Array shape

@@ -331,7 +331,6 @@ Node_New(void* data_block, int copy_data, int ndim, nr_intp* shape, NR_DTYPE dty
         SET_DEFAULT_FLAGS(result.node);
     }
     
-    result.node->base_data = result.node->data;
     return result.node;
 }
 
@@ -349,7 +348,6 @@ Node_NewEmpty(int ndim, nr_intp* shape, NR_DTYPE dtype) {
         return NULL;
     }
     
-    result.node->base_data = result.node->data;
     SET_OWNDATA_FLAGS(result.node);
     
     return result.node;
@@ -398,7 +396,6 @@ Node_CopyWithReference(const Node* src) {
     
     // Share data reference
     node->data = src->data;
-    node->base_data = src->base_data ? src->base_data : src->data;
     node->base = (Node*)src;
     ((Node*)src)->ref_count++;
     
