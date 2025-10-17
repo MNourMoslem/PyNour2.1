@@ -3,6 +3,8 @@
 
 #include "nr_types.h"
 #include "nr_dtypes.h"
+/* Forward declare dependent types to avoid circular includes */
+struct NodeOperation;
 #include <string.h>
 
 /* Array memory layout types */
@@ -46,6 +48,8 @@ typedef struct Node
     // Node name for identification.
     // This is useful for inhertance and debugging.
     const char* name;        
+    /* Optional attached operation (computation graph). Forward-declared to avoid circular include. */
+    struct NodeOperation* op;
 } Node;
 
 /* Node access macros */
