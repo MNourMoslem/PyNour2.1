@@ -48,8 +48,10 @@ typedef struct Node
     // Node name for identification.
     // This is useful for inhertance and debugging.
     const char* name;        
+    
     /* Optional attached operation (computation graph). Forward-declared to avoid circular include. */
     struct NodeOperation* op;
+    struct Node* grad;  // Gradient node reference
 } Node;
 
 /* Node access macros */

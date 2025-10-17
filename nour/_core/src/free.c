@@ -30,7 +30,12 @@ Node_Free(Node* node){
     if (node->base) {
         Node_Free(node->base);  // Recursive call handles ref_count properly
     }
-    
+
+    // Free gradient node if it exists
+    if (node->grad) {
+        Node_Free(node->grad);
+    }
+
     // Finally free the node structure itself
     free(node);
 }
