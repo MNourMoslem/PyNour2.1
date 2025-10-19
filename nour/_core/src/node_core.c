@@ -411,3 +411,44 @@ Node_CopyWithReference(const Node* src) {
 error:
     return NULL;
 }
+
+NR_PUBLIC Node*
+Node_NewScalar(void* data, NR_DTYPE dtype) {
+    // Create a 0-dim (scalar) node
+    int ndim = 0;
+    nr_intp* shape = NULL;
+
+    Node* node = InitializeNodeMetadata(ndim, dtype);
+    if (!node) {
+        NError_RaiseMemoryError();
+        return NULL;
+    }
+
+    // For scalars, allocate empty shape/strides arrays of size 0
+    node->shape = NULL;
+    node->strides = NULL;
+
+    // Allocate data for exactly one element and copy
+    if (AllocateEmptyData(node, 1) < 0) {
+        FreeNodePartial(node);
+        return NULL;
+    }
+    memcpy(node->data, data, node->dtype.size);
+
+    // Set flags and defaults
+    SET_OWNDATA_FLAGS(node);
+    NR_SETFLG(node->flags, NR_NODE_SCALAR);
+    node->name = NR_NODE_NAME;
+
+    return node;
+}
+
+NR_PUBLIC void
+Node_SetName(Node* node, const char* name) {
+    if (node && name) {
+        char* name_copy = strdup(name);
+        if (name_copy) {
+            node->name = name_copy;
+        }
+    }
+}

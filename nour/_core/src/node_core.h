@@ -15,4 +15,10 @@ Node_Copy(Node* dst, const Node* src);
 NR_PUBLIC Node*
 Node_CopyWithReference(const Node* src);
 
+NR_PUBLIC Node*
+Node_NewScalar(void* data, NR_DTYPE dtype);
+
+NR_PUBLIC void
+Node_SetName(Node* node, const char* name);
+
 #endif // NR__CORE__SRC__NODE_CORE_H
