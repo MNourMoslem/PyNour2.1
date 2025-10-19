@@ -116,6 +116,8 @@ InitializeNodeMetadata(int ndim, NR_DTYPE dtype) {
     node->base = NULL;
     node->ref_count = 1;
     node->flags = 0;
+    node->grad = NULL;
+    node->op = NULL;
     
     return node;
 
@@ -386,6 +388,8 @@ Node_CopyWithReference(const Node* src) {
     node->dtype = src->dtype;
     node->ref_count = 1;
     node->flags = src->flags;
+    node->grad = NULL;
+    node->op = NULL;
     
     // Allocate and copy shape and strides
     if (AllocateShapeAndStrides(node, src->shape) < 0) {
