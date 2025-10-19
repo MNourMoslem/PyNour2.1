@@ -9,6 +9,7 @@ int main(){
    test_boolean_mask_test();
    test_tc_test();
    test_nmath_test();
+   test_node2string_test();
 
    return 0;
 }
