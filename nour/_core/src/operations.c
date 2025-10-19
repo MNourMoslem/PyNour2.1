@@ -3,7 +3,7 @@
 #include "nerror.h"
 
 NR_PUBLIC NodeOperation*
-NodeOperation_New(NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size) {
+NodeOperation_New(NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size) {
     NodeOperation* op = (NodeOperation*)malloc(sizeof(NodeOperation));
     if (!op) {
         NError_RaiseMemoryError();
@@ -12,6 +12,7 @@ NodeOperation_New(NFunc* func, NFunc* diff_func, struct Node** input_nodes, int 
 
     op->func = func;
     op->diff_func = diff_func;
+    op->dim = dim;
 
     op->input_nodes = (Node**)malloc(sizeof(Node*) * n_input_nodes);
     if (!op->input_nodes) {
@@ -71,13 +72,13 @@ NodeOperation_Free(NodeOperation* op) {
 }
 
 NR_PUBLIC int
-NodeOperation_GenerateForNode(Node* target_node, NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size) {
+NodeOperation_GenerateForNode(Node* target_node, NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size) {
     if (!target_node) {
         NError_RaiseError(NError_ValueError, "Target node cannot be NULL.");
         return -1;
     }
 
-    NodeOperation* op = NodeOperation_New(func, diff_func, input_nodes, n_input_nodes, extra, extra_size);
+    NodeOperation* op = NodeOperation_New(func, diff_func, input_nodes, n_input_nodes, dim, extra, extra_size);
     if (!op) {
         return -1;  // Error already raised in NodeOperation_New
     }
@@ -93,7 +94,7 @@ NodeOperation_GenerateForNode(Node* target_node, NFunc* func, NFunc* diff_func, 
 
 
 NR_PUBLIC int
-NodeOperation_GenerateForNodeIfTrackable(Node* target_node, NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size) {
+NodeOperation_GenerateForNodeIfTrackable(Node* target_node, NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size) {
     if (!target_node) {
         NError_RaiseError(NError_ValueError, "Target node cannot be NULL.");
         return -1;
@@ -101,7 +102,7 @@ NodeOperation_GenerateForNodeIfTrackable(Node* target_node, NFunc* func, NFunc* 
 
     if (NODE_IS_TRACK(target_node)) {
         // Target node is trackable; generate operation
-        return NodeOperation_GenerateForNode(target_node, func, diff_func, input_nodes, n_input_nodes, extra, extra_size);
+        return NodeOperation_GenerateForNode(target_node, func, diff_func, input_nodes, n_input_nodes, dim, extra, extra_size);
     }
 
     return 0;  // No operation generated, but not an error

@@ -8,16 +8,16 @@
 #include <stdlib.h>
 
 NR_PUBLIC NodeOperation*
-NodeOperation_New(NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size);
+NodeOperation_New(NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size);
 
 NR_PUBLIC void 
 NodeOperation_Free(NodeOperation* op);
 
 NR_PUBLIC int
-NodeOperation_GenerateForNode(Node* target_node, NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size);
+NodeOperation_GenerateForNode(Node* target_node, NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size);
 
 NR_PUBLIC int
-NodeOperation_GenerateForNodeIfTrackable(Node* target_node, NFunc* func, NFunc* diff_func, struct Node** input_nodes, int n_input_nodes, void* extra, size_t extra_size);
+NodeOperation_GenerateForNodeIfTrackable(Node* target_node, NFunc* func, GradFunc* diff_func, struct Node** input_nodes, int n_input_nodes, int dim, void* extra, size_t extra_size);
 
 
 #endif // NOUR__CORE__SRC__OPERATIONS_H

@@ -32,4 +32,6 @@ typedef struct
 /* Function pointer type for PyNour operations */
 typedef int (*NFunc) (NFuncArgs*);
 
+typedef int (*GradFunc) (Node* out_node);
+
 #endif
