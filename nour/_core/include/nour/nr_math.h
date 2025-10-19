@@ -40,6 +40,10 @@
 #define NR_SQRT1_2f  0.707106781186547524400844362104849039F /* 1/sqrt(2) */
 
 /* Double precision mathematical functions */
+#define nr_sin sin
+#define nr_cos cos
+#define nr_tan tan
+#define nr_cot(x) (1.0 / tan(x))
 #define nr_sinh sinh
 #define nr_cosh cosh
 #define nr_tanh tanh
@@ -66,11 +70,17 @@
 #define nr_copysign copysign
 #define nr_exp exp
 #define nr_sqrt sqrt
+#define nr_expf expf
+#define nr_sqrtf sqrtf
 #define nr_pow pow
 #define nr_modf modf
 #define nr_nextafter nextafter
 
 /* Single precision mathematical functions */
+#define nr_sinf sinf
+#define nr_cosf cosf
+#define nr_tanf tanf
+#define nr_cotf(x) (1.0f / tanf(x))
 #define nr_sinhf sinhf
 #define nr_coshf coshf
 #define nr_tanhf tanhf
@@ -111,9 +121,18 @@
 /* Integer-specific operations */
 #define NMATH_MOD(a, b) (a % b)
 #define NMATH_TDV(a, b) (a / b)
+#define NMATH_TRUEDIV(a, b) (a / b)
 
 /* Floating-point operations */
 #define NMATH_DIV(a, b) (a / b)
 #define NMATH_POW(a, b) (nr_pow(a, b))
+
+/* Bitwise operations */
+#define NMATH_BIT_AND(a, b) (a & b)
+#define NMATH_BIT_OR(a, b) (a | b)
+#define NMATH_BIT_XOR(a, b) (a ^ b)
+#define NMATH_BIT_NOT(a) (~a)
+#define NMATH_BIT_LSH(a, b) (a << b)
+#define NMATH_BIT_RSH(a, b) (a >> b)
 
 #endif // NR__CORE__INCLUDE__NR_MATH_H

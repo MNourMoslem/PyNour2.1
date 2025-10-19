@@ -3,6 +3,13 @@
 
 #include "nr_types.h"
 
+/* DType Definitions */
+
+#define NDTYPE_NONE 0
+#define NDTYPE_BOOL 1
+#define NDTYPE_INT 2
+#define NDTYPE_FLOAT 4
+
 /*
     Data Type Enumeration
     --------------------
@@ -136,6 +143,43 @@ NDtype_AsString(NR_DTYPE dtype, char dst[]){
         break;
     }
 }
+
+
+/*
+    Gets the basic type category for a given data type.
+    
+    Parameters:
+        dtype: The data type to check
+    
+    Returns:
+        NDTYPE_BOOL for boolean types
+        NDTYPE_INT for integer types
+        NDTYPE_FLOAT for floating-point types
+        -1 for unknown types
+*/
+NR_HEADER int
+NDtype_GetDtypeType(NR_DTYPE dtype){
+    switch (dtype)
+    {
+    case NR_BOOL:
+        return NDTYPE_BOOL;
+    case NR_INT8:
+    case NR_UINT8:
+    case NR_INT16:
+    case NR_UINT16:
+    case NR_INT32:
+    case NR_UINT32:
+    case NR_INT64:
+    case NR_UINT64:
+        return NDTYPE_INT;
+    case NR_FLOAT32:
+    case NR_FLOAT64:
+        return NDTYPE_FLOAT;
+    default:
+        return NDTYPE_NONE;
+    }
+}
+
 
 /*
     Converts a data type to its variable type string representation.

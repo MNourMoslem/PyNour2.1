@@ -3,6 +3,6 @@
 
 #include "nour/nour.h"
 #include "node_core.h"
-#include "build/generated/__nmath_generated.h"
+#include "nmath/nmath.h"
 
 #endif
