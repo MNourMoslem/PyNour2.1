@@ -21,4 +21,16 @@ Node_ToString(Node* node, char* buffer);
 NR_PUBLIC void
 Node_Print(Node* node);
 
+NR_PUBLIC void
+Node_SetPrintOptions(NodePrintOptions* opts);
+
+NR_PUBLIC NodePrintOptions*
+Node_GetPrintOptions(void);
+
+NR_PUBLIC void
+Node_ToStringWithOptions(Node* node, char* buffer, NodePrintOptions* opts);
+
+NR_PUBLIC void
+Node_PrintWithOptions(Node* node, NodePrintOptions* opts);
+
 #endif // NOUR__CORE_SRC_NOUR_NODE2STR_H
