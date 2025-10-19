@@ -36,6 +36,11 @@ Node_Free(Node* node){
         Node_Free(node->grad);
     }
 
+    // Free the name if it is not the default static string
+    if (node->name && node->name != NR_NODE_NAME) {
+        free((void*)node->name);
+    }
+
     // Finally free the node structure itself
     free(node);
 }
