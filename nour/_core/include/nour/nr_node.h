@@ -55,23 +55,29 @@ typedef struct Node
 } Node;
 
 /* Node access macros */
-#define NODE_DATA(node) node->data
-#define NODE_DTYPE(node) node->dtype.dtype
-#define NODE_ITEMSIZE(node) node->dtype.size
-#define NODE_SHAPE(node) node->shape
-#define NODE_NDIM(node) node->ndim
-#define NODE_STRIDES(node) node->strides
+#define NODE_DATA(node)      node->data
+#define NODE_DTYPE(node)     node->dtype.dtype
+#define NODE_ITEMSIZE(node)  node->dtype.size
+#define NODE_SHAPE(node)     node->shape
+#define NODE_NDIM(node)      node->ndim
+#define NODE_STRIDES(node)   node->strides
+#define NODE_REFCOUNT(node)  node->ref_count
+#define NODE_BASE(node)      node->base
+#define NODE_FLAGS(node)     node->flags
+#define NODE_OP(node)        node->op
+#define NODE_GRAD(node)      node->grad
+#define NODE_NAME(node)      node->name
 
 /* Node property check macros */
-#define NODE_IS_C_ORDER(node) NR_CHKFLG(node->flags, NR_NODE_C_ORDER)
-#define NODE_IS_F_ORDER(node) NR_CHKFLG(node->flags, NR_NODE_F_ORDER)
+#define NODE_IS_C_ORDER(node)    NR_CHKFLG(node->flags, NR_NODE_C_ORDER)
+#define NODE_IS_F_ORDER(node)    NR_CHKFLG(node->flags, NR_NODE_F_ORDER)
 #define NODE_IS_CONTIGUOUS(node) NR_CHKFLG(node->flags, NR_NODE_CONTIGUOUS)
-#define NODE_IS_STRIDED(node) NR_CHKFLG(node->flags, NR_NODE_STRIDED)
+#define NODE_IS_STRIDED(node)    NR_CHKFLG(node->flags, NR_NODE_STRIDED)
 // #define NODE_IS_SCALAR(node) NR_CHKFLG(node->flags, NR_NODE_SCALAR)
-#define NODE_IS_WRITABLE(node) NR_CHKFLG(node->flags, NR_NODE_WRITABLE)
-#define NODE_IS_SORTED(node) NR_CHKFLG(node->flags, NR_NODE_SORTED)
-#define NODE_IS_OWNDATA(node) NR_CHKFLG(node->flags, NR_NODE_OWNDATA)
-#define NODE_IS_TRACK(node) NR_CHKFLG(node->flags, NR_NODE_TRACK)
+#define NODE_IS_WRITABLE(node)   NR_CHKFLG(node->flags, NR_NODE_WRITABLE)
+#define NODE_IS_SORTED(node)     NR_CHKFLG(node->flags, NR_NODE_SORTED)
+#define NODE_IS_OWNDATA(node)    NR_CHKFLG(node->flags, NR_NODE_OWNDATA)
+#define NODE_IS_TRACK(node)      NR_CHKFLG(node->flags, NR_NODE_TRACK)
 
 #define NODE_IS_SCALAR(node) (node->ndim == 0)
 
