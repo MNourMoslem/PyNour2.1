@@ -10,6 +10,7 @@ int main(){
    test_tc_test();
    test_nmath_test();
    test_node2string_test();
+   test_narray_test();
 
    return 0;
 }

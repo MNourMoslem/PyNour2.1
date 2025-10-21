@@ -47,5 +47,6 @@ void test_boolean_mask_test();
 void test_tc_test();
 void test_nmath_test();
 void test_node2string_test();
+void test_narray_test();
 
 #endif // NR__CORE__TESTS__MAIN_H
