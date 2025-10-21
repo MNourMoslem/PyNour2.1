@@ -41,7 +41,6 @@ static void run_test(const char* test_name, int num_of_tests, test_callback_t* t
 void test_allocation_test();
 void test_shape_test();
 void test_index_test();
-void test_multislice_test();
 void test_refcount_test();
 void test_boolean_mask_test();
 void test_tc_test();
