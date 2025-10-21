@@ -1,6 +1,6 @@
 #include "main.h"
 #include "../src/node_core.h"
-#include "../src/slice.h"
+#include "../src/index.h"
 #include "../src/free.h"
 
 NR_STATIC int test_boolean_mask_basic(){

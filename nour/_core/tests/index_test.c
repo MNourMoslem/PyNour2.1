@@ -1,6 +1,6 @@
 #include "main.h"
 #include "../src/node_core.h"
-#include "../src/slice.h"
+#include "../src/index.h"
 #include "../src/free.h"
 #include "../src/nerror.h"
 #include "../src/niter.h"
@@ -344,7 +344,7 @@ void test_multislice_test(){
     });
 }
 
-void test_slice_test(){
+void test_index_test(){
     run_test("Slice Test", 6, (test_callback_t[]){
         test_slice_basic,
         test_slice_step,

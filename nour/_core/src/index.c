@@ -1,4 +1,4 @@
-#include "slice.h"
+#include "index.h"
 #include "nerror.h"
 #include "node_core.h"
 #include "niter.h"
