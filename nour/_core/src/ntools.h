@@ -18,4 +18,7 @@ NTools_CalculateStrides(int nd, const nr_intp* shape,
 NR_PUBLIC void
 NTools_ShapeAsString(nr_intp* shape, int ndim, char str[]);
 
+NR_PUBLIC int
+NTools_BroadcastShapes(Node** nodes, int n_nodes, nr_intp* out_shape, int* out_ndim);
+
 #endif

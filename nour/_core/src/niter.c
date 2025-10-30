@@ -1,5 +1,6 @@
 #include "niter.h"
 #include "nerror.h"
+#include "ntools.h"
 
 NR_PUBLIC void
 NIter_FromNode(NIter* niter, const Node* node, int iter_mode){
@@ -31,48 +32,15 @@ NIter_New(NIter* niter ,void* data, int ndim, const nr_intp* shape,
 
 NR_PUBLIC int
 NMultiIter_New(Node** nodes, int n_nodes, NMultiIter* mit){
-    int nd = -1;
-    for (int i = 0; i < n_nodes; i++){
-        nd = NR_MAX(nodes[i]->ndim, nd);
-    }
-    mit->out_ndim = nd;
-
-    int src_node, tmp;
-    nr_intp dim;
-    Node* node;
-    for (int i = 0; i < nd; i++){
-        mit->out_shape[i] = 1;
-        for (int j = 0; j < n_nodes; j++){
-            node = nodes[j];
-            tmp = i + node->ndim - nd;
-            if (tmp >= 0){
-                dim = node->shape[tmp];
-                if (dim == 1){
-                    continue;
-                }
-                else if (mit->out_shape[i] == 1)
-                {   
-                    mit->out_shape[i] = dim;
-                    src_node = j;
-                }
-                else if (mit->out_shape[i] != dim){
-                    char shape1[100];
-                    char shape2[100];
-
-                    NTools_ShapeAsString(node->shape, node->ndim, shape1);
-                    NTools_ShapeAsString(nodes[src_node]->shape, nodes[src_node]->ndim, shape2);
-
-                    NError_RaiseError(NError_ValueError,
-                        "objects cannot be broadcast due mismatch at arg %d " 
-                        "with shape %s and arg %d with shape %s",
-                        j, shape1, src_node, shape2
-                    );
-                }
-            }
-        }
+    // Use the new broadcast shapes function
+    if (NTools_BroadcastShapes(nodes, n_nodes, mit->out_shape, &mit->out_ndim) != 0) {
+        return -1;
     }
 
     nr_intp tmp_str[NR_NODE_MAX_NDIM];
+    int tmp;
+    Node* node;
+    
     for (int i = 0; i < n_nodes; i++){
         node = nodes[i];
         tmp = NTools_BroadcastStrides(node->shape, node->ndim, node->strides, mit->out_shape, mit->out_ndim, tmp_str);
