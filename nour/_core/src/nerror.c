@@ -50,6 +50,9 @@ _NError_TypeAsString(NError_Type type, char* trg_str) {
         case NError_OverflowError:
             strcpy(trg_str, "OverflowError");
             break;
+        case NError_NotImplementedError:
+            strcpy(trg_str, "NotImplementedError");
+            break;
         default:
             strcpy(trg_str, "UnknownError");
             break;

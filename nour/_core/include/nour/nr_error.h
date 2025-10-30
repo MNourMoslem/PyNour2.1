@@ -25,7 +25,8 @@ typedef enum {
     NError_KeyError,         // Key-related errors in mapping operations
     NError_AssertionError,   // Assertion failure errors
     NError_RuntimeError,     // General runtime errors
-    NError_OverflowError     // Numeric overflow errors
+    NError_OverflowError,    // Numeric overflow errors
+    NError_NotImplementedError // Feature not implemented errors
 }NError_Type;
 
 /*

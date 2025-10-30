@@ -67,4 +67,8 @@ NR_HEADER void* NError_RaiseOverflowError() {
     return NError_RaiseErrorNoContext(NError_OverflowError);
 }
 
+NR_HEADER void* NError_RaiseNotImplementedError() {
+    return NError_RaiseErrorNoContext(NError_NotImplementedError);
+}
+
 #endif
