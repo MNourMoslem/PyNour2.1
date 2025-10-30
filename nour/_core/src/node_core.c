@@ -443,6 +443,95 @@ Node_NewScalar(void* data, NR_DTYPE dtype) {
     return node;
 }
 
+NR_PUBLIC Node*
+Node_NewAdvanced(void* data_block, int copy_data, int ndim, nr_intp* shape, 
+                 nr_intp* strides, NR_DTYPE dtype, int flags, const char* name) {
+    NodeInitResult result = CreateNodeStructure(ndim, shape, dtype);
+    
+    if (!result.node || result.nitems < 0) {
+        NError_RaiseMemoryError();
+        return NULL;
+    }
+    
+    // Set custom strides if provided, otherwise use computed strides
+    if (strides) {
+        memcpy(result.node->strides, strides, SHAPE_STRIDE_SIZE(ndim));
+    }
+    // Note: strides were already computed in CreateNodeStructure if strides == NULL
+    
+    
+    // Handle data allocation/assignment
+    if (copy_data) {
+        if (AllocateAndCopyData(result.node, data_block, result.nitems) < 0) {
+            FreeNodePartial(result.node);
+            return NULL;
+        }
+        SET_OWNDATA_FLAGS(result.node);
+    }
+    else {
+        result.node->data = data_block;
+        SET_DEFAULT_FLAGS(result.node);
+    }
+    
+    
+    // Set custom flags if provided, otherwise use defaults
+    if (flags != 0) {
+        result.node->flags = flags;
+    } 
+    
+    // Set custom name if provided
+    if (name) {
+        char* name_copy = strdup(name);
+        if (name_copy) {
+            result.node->name = name_copy;
+        }
+    }
+    
+    return result.node;
+}
+
+NR_PUBLIC Node*
+Node_NewEmptyAdvanced(int ndim, nr_intp* shape, nr_intp* strides, 
+                      NR_DTYPE dtype, int flags, const char* name) {
+    NodeInitResult result = CreateNodeStructure(ndim, shape, dtype);
+    
+    if (!result.node || result.nitems < 0) {
+        NError_RaiseMemoryError();
+        return NULL;
+    }
+    
+    // Set custom strides if provided, otherwise use computed strides
+    if (strides) {
+        memcpy(result.node->strides, strides, SHAPE_STRIDE_SIZE(ndim));
+    }
+    // Note: strides were already computed in CreateNodeStructure if strides == NULL
+    
+    // Allocate empty data
+    if (AllocateEmptyData(result.node, result.nitems) < 0) {
+        FreeNodePartial(result.node);
+        return NULL;
+    }
+    
+    // Set custom flags if provided, otherwise use defaults with OWNDATA
+    if (flags != 0) {
+        result.node->flags = flags;
+        // Ensure OWNDATA flag is set since we allocated the data
+        NR_SETFLG(result.node->flags, NR_NODE_OWNDATA);
+    } else {
+        SET_OWNDATA_FLAGS(result.node);
+    }
+    
+    // Set custom name if provided
+    if (name) {
+        char* name_copy = strdup(name);
+        if (name_copy) {
+            result.node->name = name_copy;
+        }
+    }
+    
+    return result.node;
+}
+
 NR_PUBLIC void
 Node_SetName(Node* node, const char* name) {
     if (node && name) {
@@ -451,4 +540,16 @@ Node_SetName(Node* node, const char* name) {
             node->name = name_copy;
         }
     }
+}
+
+NR_PUBLIC int
+_Node_Inherit(Node* dst, Node* src) {
+    if (!dst || !src) {
+        return -1;
+    }
+
+    NODE_BASE(dst) = (Node*)src;
+    NODE_REFCOUNT(src)++;
+
+    return 0;
 }
