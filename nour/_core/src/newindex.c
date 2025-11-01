@@ -243,23 +243,9 @@ is_node_in_indices(NIndexRuleSet* rs){
     return 0;
 }
 
-NR_STATIC_INLINE int
-is_copy_required(NIndexRuleSet* rs){
-    // The only case where copy is not required is when all indices are slices
-    for (nr_intp i = 0; i < NIndexRuleSet_NUM_RULES(rs); i++){
-        NIndexRule* rule = &NIndexRuleSet_RULES(rs)[i];
-        if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice){
-            return 1;
-        }
-    }
-    return 0;
-}
-
 
 NR_STATIC_INLINE Node*
 node_index_handle_node_indices(NIndexRuleSet* rs){
-    
-
 
 
 
@@ -270,7 +256,7 @@ NR_STATIC_INLINE Node*
 node_index_handle_non_node_indices(NIndexRuleSet* rs){
     Node* base_node = NIndexRuleSet_BASE_ARRAY(rs);
     int ellipsis_found = 0;
-    int copy_needed = is_copy_required(rs);  // Use the consistent copy logic
+    int copy_needed = 0;  // Use the consistent copy logic
     int dim = 0;
     int tdim = 0;
 
@@ -288,6 +274,7 @@ node_index_handle_non_node_indices(NIndexRuleSet* rs){
             int index = NIndexInt_INDEX(NIndexRule_DATA_AS_INT(rule));
             data_ptr += NODE_STRIDES(base_node)[dim] * index;
             dim++;
+            copy_needed = 1;
             break;
 
         case NIndexRuleType_Slice:
