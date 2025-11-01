@@ -187,34 +187,6 @@ NIndexRuleSet_AddNode(NIndexRuleSet* rs, Node* index_node){
     return 0;
 }
 
-NR_PUBLIC int
-NIndexRuleSet_AddBoolNode(NIndexRuleSet* rs, Node* bool_node){
-    NINDEXRULESET_MAX_NUM_ERR(rs);
-
-    if (!bool_node) {
-        NError_RaiseError(NError_ValueError, "Boolean node cannot be NULL");
-        return -1;
-    }
-
-    // Validate that the node contains boolean values
-    if (NODE_DTYPE(bool_node) != NR_BOOL) {
-        char dtype_str[50];
-        NDtype_AsString(NODE_DTYPE(bool_node), dtype_str);
-        NError_RaiseError(NError_TypeError, 
-            "Boolean index arrays must be of boolean type, got %s", dtype_str);
-        return -1;
-    }
-
-    // Boolean indexing consumes all remaining dimensions
-    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
-    NIndexRule_TYPE(rule) = NIndexRuleType_BoolNode;
-    NIndexRule_DATA(rule).node_data.node = bool_node;
-
-    // Increment reference count since we're storing the node
-    bool_node->ref_count++;
-
-    return 0;
-}
 
 NR_PUBLIC void
 NIndexRuleSet_Cleanup(NIndexRuleSet* rs){
@@ -223,8 +195,7 @@ NIndexRuleSet_Cleanup(NIndexRuleSet* rs){
     // Decrement reference counts for any stored nodes
     for (nr_intp i = 0; i < NIndexRuleSet_NUM_RULES(rs); i++){
         NIndexRule* rule = &NIndexRuleSet_RULES(rs)[i];
-        if (NIndexRule_TYPE(rule) == NIndexRuleType_Node || 
-            NIndexRule_TYPE(rule) == NIndexRuleType_BoolNode) {
+        if (NIndexRule_TYPE(rule) == NIndexRuleType_Node) {
             Node* node = NIndexNode_NODE(NIndexRule_DATA_AS_NODE(rule));
             if (node) {
                 node->ref_count--;
@@ -287,8 +258,11 @@ is_copy_required(NIndexRuleSet* rs){
 
 NR_STATIC_INLINE Node*
 node_index_handle_node_indices(NIndexRuleSet* rs){
-    // TODO: Implement node-based indexing (fancy indexing)
-    NError_RaiseError(NError_NotImplementedError, "Node-based indexing not yet implemented");
+    
+
+
+
+
     return NULL;
 }
 
