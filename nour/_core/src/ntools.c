@@ -80,51 +80,65 @@ NTools_ShapeAsString(nr_intp* shape, int ndim, char str[]) {
 
 NR_PUBLIC int
 NTools_BroadcastShapes(Node** nodes, int n_nodes, nr_intp* out_shape, int* out_ndim) {
-    if (!nodes || n_nodes <= 0 || !out_shape || !out_ndim) {
+    nr_intp* shapes[NR_MULTIITER_MAX_NITER];
+    int ndims[NR_MULTIITER_MAX_NITER];
+
+    for (int i = 0; i < n_nodes; i++) {
+        if (!nodes[i]) {
+            return -1; // Null node
+        }
+        shapes[i] = nodes[i]->shape;
+        ndims[i] = nodes[i]->ndim;
+    }
+
+    return NTools_BroadcastShapesFromArrays(shapes, ndims, n_nodes, out_shape, out_ndim);
+}
+
+NR_PUBLIC int
+NTools_BroadcastShapesFromArrays(nr_intp** shapes, int* ndims, int n_shapes, nr_intp* out_shape, int* out_ndim) {
+    if (!shapes || !ndims || n_shapes <= 0 || !out_shape || !out_ndim) {
         return -1;
     }
 
     // Find the maximum number of dimensions
     int nd = -1;
-    for (int i = 0; i < n_nodes; i++) {
-        if (!nodes[i]) {
-            return -1; // Null node
+    for (int i = 0; i < n_shapes; i++) {
+        if (!shapes[i]) {
+            return -1; // Null shape
         }
-        nd = NR_MAX(nodes[i]->ndim, nd);
+        nd = NR_MAX(ndims[i], nd);
     }
     *out_ndim = nd;
 
-    int src_node;
+    int src_shape_idx;
     int tmp;
     nr_intp dim;
-    Node* node;
 
     // Compute the broadcast shape
     for (int i = 0; i < nd; i++) {
         out_shape[i] = 1;
-        for (int j = 0; j < n_nodes; j++) {
-            node = nodes[j];
-            tmp = i + node->ndim - nd;
+        for (int j = 0; j < n_shapes; j++) {
+            tmp = i + ndims[j] - nd;
             if (tmp >= 0) {
-                dim = node->shape[tmp];
+                dim = shapes[j][tmp];
                 if (dim == 1) {
                     continue;
                 }
                 else if (out_shape[i] == 1) {   
                     out_shape[i] = dim;
-                    src_node = j;
+                    src_shape_idx = j;
                 }
                 else if (out_shape[i] != dim) {
                     char shape1[100];
                     char shape2[100];
 
-                    NTools_ShapeAsString(node->shape, node->ndim, shape1);
-                    NTools_ShapeAsString(nodes[src_node]->shape, nodes[src_node]->ndim, shape2);
+                    NTools_ShapeAsString(shapes[j], ndims[j], shape1);
+                    NTools_ShapeAsString(shapes[src_shape_idx], ndims[src_shape_idx], shape2);
 
                     NError_RaiseError(NError_ValueError,
                         "objects cannot be broadcast due to mismatch at arg %d " 
                         "with shape %s and arg %d with shape %s",
-                        j, shape1, src_node, shape2);
+                        j, shape1, src_shape_idx, shape2);
                     return -1;
                 }
             }

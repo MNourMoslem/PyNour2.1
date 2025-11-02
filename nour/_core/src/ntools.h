@@ -21,4 +21,7 @@ NTools_ShapeAsString(nr_intp* shape, int ndim, char str[]);
 NR_PUBLIC int
 NTools_BroadcastShapes(Node** nodes, int n_nodes, nr_intp* out_shape, int* out_ndim);
 
+NR_PUBLIC int
+NTools_BroadcastShapesFromArrays(nr_intp** shapes, int* ndims, int n_shapes, nr_intp* out_shape, int* out_ndim);
+
 #endif
