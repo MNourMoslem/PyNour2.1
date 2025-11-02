@@ -37,7 +37,7 @@ int test_basic_copy(){
     Node* n2 = Node_Copy(NULL, n1);
 
     NMultiIter mit;
-    NMultiIter_New((Node*[]){n1, n2}, 2, &mit);
+    NMultiIter_FromNodes((Node*[]){n1, n2}, 2, &mit);
     NMultiIter_ITER(&mit);
 
     int idx = 0;

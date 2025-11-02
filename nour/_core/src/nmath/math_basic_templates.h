@@ -80,7 +80,7 @@ NR_PUBLIC int NMath_##OPC##_##I_NT(NFuncArgs* args) {                           
             }                                                                       \
         } else {                                                                    \
             NMultiIter mit;                                                         \
-            if (NMultiIter_New(args->nodes, 2, &mit) != 0) {                        \
+            if (NMultiIter_FromNodes(args->nodes, 2, &mit) != 0) {                        \
                 return -1;                                                          \
             }                                                                       \
                                                                                     \
@@ -236,7 +236,7 @@ NR_PUBLIC int NMath_##OPC##_##I_NT(NFuncArgs* args) {                           
             *((O_NT*)out->data) = OP(sclr);                                         \
         } else {                                                                    \
             NMultiIter mit;                                                         \
-            if (NMultiIter_New(args->nodes, 1, &mit) != 0) {                        \
+            if (NMultiIter_FromNodes(args->nodes, 1, &mit) != 0) {                        \
                 return -1;                                                          \
             }                                                                       \
                                                                                     \

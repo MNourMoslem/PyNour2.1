@@ -13,7 +13,10 @@ NR_PUBLIC void
 NIter_New(NIter* iter ,void* data, int ndim, const nr_intp* shape, const nr_intp* strides, int iter_mode);
 
 NR_PUBLIC int
-NMultiIter_New(Node** nodes, int n_nodes, NMultiIter* mit);
+NMultiIter_FromNodes(Node** nodes, int n_nodes, NMultiIter* mit);
+
+NR_PUBLIC int
+NMultiIter_New(void** data_ptr, int num, int* ndims, nr_intp** shapes, nr_intp** strides, NMultiIter* mit);
 
 NR_PUBLIC int
 NWindowIter_New(const Node* node, NWindowIter* wit, const nr_intp* window_dims,

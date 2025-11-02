@@ -31,40 +31,65 @@ NIter_New(NIter* niter ,void* data, int ndim, const nr_intp* shape,
 }
 
 NR_PUBLIC int
-NMultiIter_New(Node** nodes, int n_nodes, NMultiIter* mit){
-    // Use the new broadcast shapes function
-    if (NTools_BroadcastShapes(nodes, n_nodes, mit->out_shape, &mit->out_ndim) != 0) {
+NMultiIter_FromNodes(Node** nodes, int n_nodes, NMultiIter* mit){
+    nr_intp* shapes[NR_MULTIITER_MAX_NITER];
+    nr_intp* strides[NR_MULTIITER_MAX_NITER];
+    int ndims[NR_MULTIITER_MAX_NITER];
+    void* data_ptrs[NR_MULTIITER_MAX_NITER];
+
+    for (int i = 0; i < n_nodes; i++){
+        shapes[i] = nodes[i]->shape;
+        strides[i] = nodes[i]->strides;
+        ndims[i] = nodes[i]->ndim;
+        data_ptrs[i] = nodes[i]->data;
+    }
+
+    return NMultiIter_New(data_ptrs, n_nodes, ndims, shapes, strides, mit);
+}
+
+NR_PUBLIC int
+NMultiIter_New(void** data_ptr, int num, int* ndims, nr_intp** shapes, nr_intp** strides, NMultiIter* mit){
+    // Use the new broadcast shapes function for arrays
+    if (NTools_BroadcastShapesFromArrays(shapes, ndims, num, mit->out_shape, &mit->out_ndim) != 0) {
         return -1;
     }
 
     nr_intp tmp_str[NR_NODE_MAX_NDIM];
     int tmp;
-    Node* node;
     
-    for (int i = 0; i < n_nodes; i++){
-        node = nodes[i];
-        tmp = NTools_BroadcastStrides(node->shape, node->ndim, node->strides, mit->out_shape, mit->out_ndim, tmp_str);
+    for (int i = 0; i < num; i++){
+        tmp = NTools_BroadcastStrides(shapes[i], ndims[i], strides[i], mit->out_shape, mit->out_ndim, tmp_str);
     
         if (tmp != 0){
             return -1;
         }
 
-        if (node->ndim == mit->out_ndim 
-            && memcmp(node->shape, mit->out_shape, node->ndim * sizeof(nr_intp)) == 0 
-            && NODE_IS_CONTIGUOUS(node))
+        // Check if this array matches the output shape exactly and has contiguous strides
+        if (ndims[i] == mit->out_ndim 
+            && memcmp(shapes[i], mit->out_shape, ndims[i] * sizeof(nr_intp)) == 0)
         {
-            tmp = NITER_MODE_CONTIGUOUS;
+            // Check if strides are contiguous
+            nr_intp expected_stride = 1;  // Assuming itemsize of 1, this could be parameterized
+            int is_contiguous = 1;
+            for (int j = ndims[i] - 1; j >= 0; j--) {
+                if (strides[i][j] != expected_stride) {
+                    is_contiguous = 0;
+                    break;
+                }
+                expected_stride *= shapes[i][j];
+            }
+            tmp = is_contiguous ? NITER_MODE_CONTIGUOUS : NITER_MODE_NONE;
         }
         else
         {
             tmp = NITER_MODE_NONE;
         }
 
-        NIter_New(mit->iters + i, node->data, node->ndim, mit->out_shape, tmp_str, tmp);
+        NIter_New(mit->iters + i, data_ptr[i], ndims[i], mit->out_shape, tmp_str, tmp);
     }
 
     mit->end = (int)NR_NItems(mit->out_ndim, mit->out_shape);
-    mit->n_iter = n_nodes;
+    mit->n_iter = num;
 
     return 0;
 }
