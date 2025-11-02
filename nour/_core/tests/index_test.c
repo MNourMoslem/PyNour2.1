@@ -5,6 +5,7 @@
 #include "../src/nerror.h"
 #include "../src/niter.h"
 #include "../src/narray.h"
+#include "../src/node2str.h"
 
 // Basic slice: [start:stop]
 int test_slice_basic(){
@@ -435,6 +436,8 @@ int test_index_with_int_array_2d_axis1(){
     if (result_data[0] != 2 || result_data[1] != 4) {
         Node_Free(result); NArray_Free(idx_arr); Node_Free(node); return 0;
     }
+
+    Node_Print(result);
 
     Node_Free(result);
     NArray_Free(idx_arr);
