@@ -174,7 +174,11 @@ typedef struct
 // Next iterator
 #define NMultiIter_NEXT(mit_ptr) do {\
     (mit_ptr)->idx++;\
-    if ((mit_ptr)->n_iter == 2){\
+    if ((mit_ptr)->n_iter == 1){\
+        NIter_NEXT((mit_ptr)->iters);\
+        break;\
+    }\
+    else if ((mit_ptr)->n_iter == 2){\
         NIter_NEXT((mit_ptr)->iters);\
         NIter_NEXT((mit_ptr)->iters + 1);\
     }\
@@ -305,6 +309,50 @@ typedef struct
 
 // Get the current item
 #define NWindowIter_ITEM_WINDOW(witer_ptr) ((witer_ptr)->wcurrent)
+
+/*
+========================================
+            NCoordIter structure
+========================================
+*/
+
+// NCoordIter is a structure for iterating over coordinates in nested loop fashion
+// For shape (3, 2): (0,0), (0,1), (1,0), (1,1), (2,0), (2,1)
+typedef struct
+{
+    int ndim;                                       // number of dimensions
+    nr_intp shape[NR_NODE_MAX_NDIM];               // shape of the coordinate space
+    nr_intp coords[NR_NODE_MAX_NDIM];              // current coordinates
+    int idx;                                        // current flat index
+    int end;                                        // total number of coordinates
+} NCoordIter;
+
+// Initialize the coordinate iterator
+#define NCoordIter_ITER(citer_ptr) do { \
+    (citer_ptr)->idx = 0; \
+    memset((citer_ptr)->coords, 0, (citer_ptr)->ndim * sizeof(nr_intp)); \
+} while (0)
+
+// Next coordinate iterator
+#define NCoordIter_NEXT(citer_ptr) do { \
+    (citer_ptr)->idx++; \
+    for (int i = (citer_ptr)->ndim - 1; i >= 0; i--) { \
+        if ((citer_ptr)->coords[i] < (citer_ptr)->shape[i] - 1) { \
+            (citer_ptr)->coords[i]++; \
+            break; \
+        } \
+        (citer_ptr)->coords[i] = 0; \
+    } \
+} while (0)
+
+// Check if the coordinate iterator is done
+#define NCoordIter_NOTDONE(citer_ptr) ((citer_ptr)->idx < (citer_ptr)->end)
+
+// Get the current coordinates
+#define NCoordIter_COORDS(citer_ptr) ((citer_ptr)->coords)
+
+// Get coordinate at specific dimension
+#define NCoordIter_COORD(citer_ptr, dim) ((citer_ptr)->coords[dim])
 
 #endif
 
