@@ -1,5 +1,5 @@
 #include "nmath.h"
-
+#include "math_basic_templates.h"
 
 // Addition
 NMATH_2I_FUNCTION_AND_METHODS_ALL_TYPES(NMATH_ADD, Add)

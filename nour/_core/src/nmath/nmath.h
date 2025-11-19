@@ -2,12 +2,6 @@
 #define NOUR__CORE_SRC_NMATH_NMATH_H
 
 #include "nour/nr_node.h"
-#include "../niter.h"
-#include "../node_core.h"
-#include "../operations.h"
-#include "loops.h"
-#include "math_basic_templates.h"
-
 
 NR_PUBLIC Node* NMath_Add(Node* c, Node* b, Node* a);
 NR_PUBLIC Node* NMath_Sub(Node* c, Node* b, Node* a);
