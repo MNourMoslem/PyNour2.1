@@ -5,7 +5,6 @@
 #include "_nmath_func_core.h"
 #include "../niter.h"
 #include "../node_core.h"
-#include "../operations.h"
 #include "loops.h"
 
 #define NMATH_2I_FUNCTION_TEMPLATE(OPC, OP, O_NT, I_NT)                             \
