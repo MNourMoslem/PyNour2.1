@@ -1,4 +1,5 @@
 #include "node2str.h"
+#include "ntools.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -261,4 +262,28 @@ Node_PrintWithOptions(Node* node, NodePrintOptions* opts){
 NR_PUBLIC void
 Node_Print(Node* node){
     Node_PrintWithOptions(node, NULL);
+}
+
+NR_PUBLIC void
+Node_InfoToString(Node* node, char* buffer){
+    buffer[0] = '\0';
+
+    char dtype_str[64];
+    char shape_str[256];
+    char strides_str[256];
+    NDtype_AsStringOnlyType(node->dtype.dtype, dtype_str);
+    NTools_ShapeAsString(node->shape, node->ndim, shape_str);
+    NTools_ShapeAsString(node->strides, node->ndim, strides_str);
+
+    sprintf(buffer, "%s(dtype=%s, shape=%s, strides=%s)", 
+            NODE_NAME(node) ? NODE_NAME(node) : "unnamed",
+            dtype_str,
+            shape_str, strides_str);
+}
+
+NR_PUBLIC void
+Node_PrintInfo(Node* node){
+    char buffer[512];
+    Node_InfoToString(node, buffer);
+    printf("%s\n", buffer);
 }
