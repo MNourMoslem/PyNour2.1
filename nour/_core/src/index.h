@@ -2,105 +2,124 @@
 #define NOUR__CORE_SRC_NOUR_INDEX_H
 
 #include "nour/nour.h"
-#include "narray.h"
 
-typedef struct {
+#define NINDEXRULESET_MAX_RULES NR_NODE_MAX_NDIM
+
+typedef enum {
+    NIndexRuleType_Int,
+    NIndexRuleType_Slice,
+    NIndexRuleType_Node,
+    NIndexRuleType_Ellipsis,
+    NIndexRuleType_NewAxis,
+} NIndexRuleType;
+
+typedef struct
+{
     nr_intp start;
     nr_intp stop;
     nr_intp step;
-} Slice;
 
-/* Slice-based indexing functions */
+    nr_bool has_start;
+    nr_bool has_stop;
+} NIndexSlice;
 
-NR_PUBLIC Node*
-Node_Slice(Node* nout, const Node* node, const Slice slice, int dim);
+typedef struct {
+    nr_intp index;
+} NIndexInt;
 
-NR_PUBLIC Node*
-Node_MultiSlice(Node* nout, const Node* node, const Slice* slices, int num_slices);
+typedef struct {
+    Node* node;
+} NIndexNode;
 
-NR_PUBLIC Node*
-Node_BooleanMask(const Node* node, const Node* bool_mask);
+typedef union
+{
+    NIndexInt int_data;
+    NIndexSlice slice_data;
+    NIndexNode node_data;
+} NIndexData;
 
-/* NArray-based indexing functions */
 
-/*
-    Index a node using an integer array (fancy indexing).
-    Similar to NumPy's arr[indices] where indices is an array of integers.
-    
-    Parameters:
-        node: Source node to index
-        indices: NArray containing integer indices
-        axis: Axis along which to index (use -1 for flattened indexing)
-    
-    Returns:
-        New node with indexed elements, or NULL on error
-*/
-NR_PUBLIC Node*
-Node_IndexWithIntArray(const Node* node, const NArray* indices, int axis);
+typedef struct {
+    NIndexRuleType type;
+    NIndexData data;
+} NIndexRule;
 
-/*
-    Index a node using a boolean array (boolean masking with NArray).
-    Similar to NumPy's arr[mask] where mask is a boolean array.
-    
-    Parameters:
-        node: Source node to index
-        bool_mask: NArray containing boolean mask
-    
-    Returns:
-        New 1D node with selected elements, or NULL on error
-*/
-NR_PUBLIC Node*
-Node_IndexWithBooleanArray(const Node* node, const NArray* bool_mask);
 
-/*
-    Advanced indexing with multiple NArrays.
-    Supports indexing along multiple axes with integer arrays.
-    
-    Parameters:
-        node: Source node to index
-        indices: Array of NArray pointers (one per axis to index)
-        num_indices: Number of NArray indices
-        axes: Array of axes to index (NULL means use first num_indices axes)
-    
-    Returns:
-        New node with indexed elements, or NULL on error
-*/
-NR_PUBLIC Node*
-Node_AdvancedIndex(const Node* node, const NArray** indices, int num_indices, const int* axes);
+typedef struct {
+    NIndexRule rules[NINDEXRULESET_MAX_RULES];
+    nr_intp num_rules;
+} NIndexRuleSet;
 
-/*
-    Take elements from a node along an axis using an integer array.
-    Similar to NumPy's np.take(arr, indices, axis=axis).
-    
-    Parameters:
-        node: Source node
-        indices: NArray of integer indices
-        axis: Axis along which to take elements
-        mode: How to handle out-of-bounds indices:
-              0 = error (default)
-              1 = wrap (negative modulo)
-              2 = clip (clip to valid range)
-    
-    Returns:
-        New node with taken elements, or NULL on error
-*/
-NR_PUBLIC Node*
-Node_Take(const Node* node, const NArray* indices, int axis, int mode);
+NR_PUBLIC NIndexRuleSet
+NIndexRuleSet_New();
 
-/*
-    Put values into a node at positions specified by an integer array.
-    Similar to NumPy's np.put(arr, indices, values).
-    
-    Parameters:
-        node: Destination node (modified in-place)
-        indices: NArray of integer indices (flattened positions)
-        values: Node containing values to put
-        mode: How to handle out-of-bounds indices (0=error, 1=wrap, 2=clip)
-    
-    Returns:
-        0 on success, -1 on error
-*/
 NR_PUBLIC int
-Node_Put(Node* node, const NArray* indices, const Node* values, int mode);
+NIndexRuleSet_AddInt(NIndexRuleSet* rs, nr_intp index);
 
-#endif // NOUR__CORE_SRC_NOUR_INDEX_H
+NR_PUBLIC int
+NIndexRuleSet_AddSlice(NIndexRuleSet* rs, nr_intp start, nr_intp stop, nr_intp step);
+
+NR_PUBLIC int
+NIndexRuleSet_AddSliceAdvanced(NIndexRuleSet* rs, nr_intp start, nr_intp stop, nr_intp step,
+                                 nr_bool has_start, nr_bool has_stop);
+
+NR_PUBLIC int
+NIndexRuleSet_AddNewAxis(NIndexRuleSet* rs);
+
+NR_PUBLIC int
+NIndexRuleSet_AddEllipsis(NIndexRuleSet* rs);
+
+NR_PUBLIC int
+NIndexRuleSet_AddNode(NIndexRuleSet* rs, Node* index_node);
+
+NR_PUBLIC void
+NIndexRuleSet_Cleanup(NIndexRuleSet* rs);
+
+// Convenience functions for common indexing patterns
+NR_PUBLIC int
+NIndexRuleSet_AddFullSlice(NIndexRuleSet* rs);
+
+NR_PUBLIC int
+NIndexRuleSet_AddRange(NIndexRuleSet* rs, nr_intp start, nr_intp stop);
+
+NR_PUBLIC Node*
+Node_RealIndex(Node* base_node, NIndexRuleSet* rs);
+
+NR_PUBLIC Node*
+Node_RiskyIndex(Node* base_node, NIndexRuleSet* rs);
+
+// Macros to access structs members
+
+#define NIndexSlice_START(slice) ((slice).start)
+#define NIndexSlice_STOP(slice)  ((slice).stop)
+#define NIndexSlice_STEP(slice)  ((slice).step)
+#define NIndexSlice_HAS_START(slice)  ((slice).has_start)
+#define NIndexSlice_HAS_STOP(slice)   ((slice).has_stop)
+
+#define NIndexInt_INDEX(int_data) ((int_data).index)
+
+#define NIndexNode_NODE(node_data) ((node_data).node)
+
+#define NIndexData_AS_INT(data)   ((data).int_data)
+#define NIndexData_AS_SLICE(data) ((data).slice_data)
+#define NIndexData_AS_NODE(data)  ((data).node_data)
+
+#define NIndexRule_TYPE(rulep)      ((rulep)->type)
+#define NIndexRule_DATA(rulep)      ((rulep)->data)
+#define NIndexRule_DATA_AS_INT(rulep)   NIndexData_AS_INT(NIndexRule_DATA(rulep))
+#define NIndexRule_DATA_AS_SLICE(rulep) NIndexData_AS_SLICE(NIndexRule_DATA(rulep))
+#define NIndexRule_DATA_AS_NODE(rulep)  NIndexData_AS_NODE(NIndexRule_DATA(rulep))
+
+#define NIndexRuleSet_RULES(rsp)      ((rsp)->rules)
+#define NIndexRuleSet_RULE(rsp, i)   ((rsp)->rules[(i)])
+#define NIndexRuleSet_NUM_RULES(rsp)    ((rsp)->num_rules)
+
+#define NIndexLooper_BASE_ARRAY(looperp)   ((looperp)->base_array)
+#define NIndexLooper_NODE_IN_INDICES(looperp) ((looperp)->node_in_indices)
+#define NIndexLooper_COPY(looperp) ((looperp)->copy)
+#define NIndexLooper_TARGET_SHAPE(looperp) ((looperp)->target_shape)
+#define NIndexLooper_TARGET_STRIDES(looperp) ((looperp)->target_strides)
+#define NIndexLooper_TARGET_NDIM(looperp) ((looperp)->target_ndim)
+
+
+#endif 

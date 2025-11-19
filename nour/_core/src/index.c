@@ -1,851 +1,850 @@
 #include "index.h"
 #include "nerror.h"
 #include "node_core.h"
-#include "niter.h"
-#include "narray.h"
 #include "free.h"
+#include "niter.h"
+#include "tc_methods.h"
+#include "ntools.h"
+#include "node2str.h"  
 
-NR_PUBLIC Node*
-Node_Slice(Node* nout, const Node* node, const Slice slice, int dim){
-    if (!node){
-        NError_RaiseError(NError_ValueError, "Node cannot be NULL.");
-        return NULL;
-    }
 
-    if (NODE_NDIM(node) == 0 || dim < 0 || dim >= NODE_NDIM(node)){
-        NError_RaiseError(NError_IndexError, 
-            "Invalid dimension for slicing. got %d for array with %d dimensions.", 
-            dim, NODE_NDIM(node));
-        return NULL;
-    }
+#define NIndex_INT NR_INT64
 
-    nr_intp start = slice.start;
-    nr_intp stop = slice.stop;
-    nr_intp step = slice.step;
-    nr_intp dim_size = NODE_SHAPE(node)[dim];
+#define HAS_INT       1
+#define HAS_SLICE     2
+#define HAS_NODE      4
+#define HAS_ELLIPSIS  8
+#define HAS_NEW_AXIS  16
+#define HAS_BOOL      32
 
-    if (step == 0){
-        NError_RaiseError(NError_ValueError, "Slice step cannot be zero.");
-        return NULL;
-    }
 
-    // Normalize negative indices
-    if (start < 0) start += dim_size;
-    if (stop < 0) stop += dim_size;
+typedef struct {
+    int index_type;          // bitmask of index types present
+    int copy_needed;        // whether a copy of data is needed
+    int fancy_dims;         // number of fancy indexing dimensions
+    int new_axis_dims;      // number of new axis dimensions
+    int keeped_dims;        // number of kept dimensions
+    int risky_indexing;    // whether risky indexing is used
+}
+indices_unpack_info;
 
-    // Clamp to valid range
-    if (start < 0) start = (step > 0) ? 0 : -1;
-    if (start > dim_size) start = (step > 0) ? dim_size : dim_size;
-    if (stop < 0) stop = (step > 0) ? 0 : -1;
-    if (stop > dim_size) stop = (step > 0) ? dim_size : dim_size;
 
-    // Calculate new dimension size
-    nr_intp new_dim_size;
-    if (step > 0) {
-        new_dim_size = (stop > start) ? ((stop - start + step - 1) / step) : 0;
-    } else {
-        new_dim_size = (start > stop) ? ((start - stop - step - 1) / (-step)) : 0;
-    }
+typedef struct {
+    int out_ndim;                           // output number of dimensions
+    nr_intp out_shape[NR_NODE_MAX_NDIM];       // output shape
+    nr_intp out_strides[NR_NODE_MAX_NDIM];     // output strides
+} no_node_indices_info;
 
-    // Create output node if not provided
-    if (!nout){
-        nout = Node_CopyWithReference(node);
-        if (!nout) return NULL;
-    }
 
-    // Calculate the offset for the new data pointer
-    nr_intp offset = start * NODE_STRIDES(node)[dim];
-    nout->data = (char*)node->data + offset;
-    
-    // Update shape and strides
-    NODE_SHAPE(nout)[dim] = new_dim_size;
-    NODE_STRIDES(nout)[dim] = NODE_STRIDES(node)[dim] * step;
+typedef struct
+{
+    Node* nodes[NR_MULTIITER_MAX_NITER];    // array of index nodes
+    int is_temp[NR_MULTIITER_MAX_NITER];    // positions of temporary nodes to free
+    int in_node_dims[NR_NODE_MAX_NDIM];     // input node dimensions
+    int node_count;                         // total number of node indices
+}node_indices_info;
 
-    // Set base reference to source node and increment refcount
-    if (nout->base != node) {
-        nout->base = (Node*)node;
-        ((Node*)node)->ref_count++;
-    }
 
-    // Mark as not owning data and update flags
-    NR_RMVFLG(nout->flags, NR_NODE_OWNDATA);
-    NR_SETFLG(nout->flags, NR_NODE_STRIDED);
-    NR_RMVFLG(nout->flags, NR_NODE_CONTIGUOUS);
 
-    return nout;
+NR_PUBLIC NIndexRuleSet
+NIndexRuleSet_New() {
+    NIndexRuleSet rs;
+    NIndexRuleSet_NUM_RULES(&rs) = 0;
+    return rs;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddInt(NIndexRuleSet* rs, nr_intp index) {
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
+    rule->type = NIndexRuleType_Int;
+    rule->data.int_data.index = index;
+    return 0;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddSliceAdvanced(NIndexRuleSet* rs, nr_intp start, nr_intp stop, nr_intp step,
+                                 nr_bool has_start, nr_bool has_stop) 
+{
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
+    rule->type = NIndexRuleType_Slice;
+    NIndexSlice* slice = &rule->data.slice_data;
+
+    slice->start = start;
+    slice->stop = stop;
+    slice->step = step;
+
+    slice->has_start = has_start;
+    slice->has_stop = has_stop;
+    return 0;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddSlice(NIndexRuleSet* rs, nr_intp start, nr_intp stop, nr_intp step) {
+    return NIndexRuleSet_AddSliceAdvanced(rs, start, stop, step, 1, 1);
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddNewAxis(NIndexRuleSet* rs) {
+    NINDEXRULESET_MAX_NUM_ERR(rs);
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
+    rule->type = NIndexRuleType_NewAxis;
+    return 0;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddEllipsis(NIndexRuleSet* rs) {
+    NINDEXRULESET_MAX_NUM_ERR(rs);
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
+    rule->type = NIndexRuleType_Ellipsis;
+    return 0;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddNode(NIndexRuleSet* rs, Node* index_node) {
+    NINDEXRULESET_MAX_NUM_ERR(rs);
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
+    rule->type = NIndexRuleType_Node;
+    rule->data.node_data.node = index_node;
+    return 0;
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddFullSlice(NIndexRuleSet* rs) {
+    return NIndexRuleSet_AddSliceAdvanced(rs, 0, 0, 1, 0, 0);
+}
+
+NR_PUBLIC int
+NIndexRuleSet_AddRange(NIndexRuleSet* rs, nr_intp start, nr_intp stop) {
+    return NIndexRuleSet_AddSlice(rs, start, stop, 1);
+}
+
+NR_PUBLIC void
+NIndexRuleSet_Cleanup(NIndexRuleSet* rs) {
+    if (!rs) return;
+    rs->num_rules = 0;
 }
 
 
-NR_PUBLIC Node*
-Node_MultiSlice(Node* nout, const Node* node, const Slice* slices, int num_slices){
-    if (!node || !slices){
-        NError_RaiseError(NError_ValueError, "Node and slices cannot be NULL.");
-        return NULL;
-    }
-
-    if (NODE_NDIM(node) == 0){
-        NError_RaiseError(NError_IndexError, "Cannot slice a 0-dimensional array.");
-        return NULL;
-    }
-
-    if (num_slices > NODE_NDIM(node)){
-        NError_RaiseError(NError_IndexError, 
-            "Too many slices: got %d slices for array with %d dimensions.", 
-            num_slices, NODE_NDIM(node));
-        return NULL;
-    }
-
-    // Create output node if not provided
-    if (!nout){
-        nout = Node_CopyWithReference(node);
-        if (!nout) return NULL;
-    }
-
-    // Calculate total offset and new shapes/strides for all dimensions
-    nr_intp total_offset = 0;
-    
-    for (int dim = 0; dim < num_slices; dim++){
-        const Slice* slice_ptr = &slices[dim];
-        
-        // Skip NULL slices (equivalent to ':')
-        if (slice_ptr == NULL || 
-            (slice_ptr->start == 0 && slice_ptr->stop == 0 && slice_ptr->step == 0)){
-            continue;
+NR_STATIC_INLINE void
+free_nodes_in_info(node_indices_info* info) {
+    for (int i = 0; i < info->node_count; i++) {
+        if (info->is_temp[i]) {
+            Node_Free(info->nodes[i]);
         }
+    }
+}
 
-        nr_intp start = slice_ptr->start;
-        nr_intp stop = slice_ptr->stop;
-        nr_intp step = slice_ptr->step;
-        nr_intp dim_size = NODE_SHAPE(node)[dim];
+NR_STATIC_INLINE int
+unpack_indices(NIndexRuleSet* rs, indices_unpack_info* info){
+    info->copy_needed = 0;
+    info->fancy_dims = 0;
+    info->new_axis_dims = 0;
+    info->index_type = 0;
+    info->keeped_dims = 0;
+    
+    for (nr_intp i = 0; i < NIndexRuleSet_NUM_RULES(rs); i++) {
+        NIndexRule* rule = &NIndexRuleSet_RULES(rs)[i];
+        NIndexRuleType type = NIndexRule_TYPE(rule);
+        
+        switch (type) {
+            case NIndexRuleType_Int:
+                info->index_type |= HAS_INT;
+                info->copy_needed = 1;
+                break;
+                
+            case NIndexRuleType_Slice:
+                info->index_type |= HAS_SLICE;
+                info->keeped_dims += 1;
+                break;
+                
+            case NIndexRuleType_Node: {
+                info->index_type |= HAS_NODE;
+                info->copy_needed = 1;
+                info->fancy_dims += 1;
 
-        if (step == 0){
-            NError_RaiseError(NError_ValueError, 
-                "Slice step cannot be zero at dimension %d.", dim);
+                Node* index_node = NIndexRule_DATA_AS_NODE(rule).node;
+                if (NODE_DTYPE(index_node) == NR_BOOL) {
+                    info->index_type |= HAS_BOOL;
+                }
+                break;
+            }
+                
+            case NIndexRuleType_Ellipsis:
+                if (info->index_type & HAS_ELLIPSIS) {
+                    NError_RaiseError(NError_IndexError, "Multiple ellipses found in indexing.");
+                    return -1;
+                }
+                info->index_type |= HAS_ELLIPSIS;
+                break;
+                
+            case NIndexRuleType_NewAxis:
+                info->index_type |= HAS_NEW_AXIS;
+                info->new_axis_dims += 1;
+                break;
+                
+            default:
+                break;
+        }
+    }
+
+    return 0;
+}
+
+
+NR_STATIC_INLINE char*
+handle_non_node_indices(char* data_ptr, int ndim,
+                        nr_intp* base_shape, nr_intp* base_strides,
+                        NIndexRuleSet* rs, indices_unpack_info* info,
+                        no_node_indices_info* nnii)
+{
+    int num_rules = NIndexRuleSet_NUM_RULES(rs);
+    int dim = 0;      // current dimension in base node
+    int tdim = 0;     // current dimension in target node    
+
+    nnii->out_ndim = 0;
+    nr_intp* tshape = nnii->out_shape;
+    nr_intp* tstrides = nnii->out_strides;
+
+    nr_intp offset = 0;
+
+    for (int i = 0; i < num_rules; i++){
+        NIndexRule* rule = &NIndexRuleSet_RULES(rs)[i];
+        NIndexRuleType type = NIndexRule_TYPE(rule);
+        NIndexData data = NIndexRule_DATA(rule);
+
+        switch (type){
+            case NIndexRuleType_Int: {
+                NIndexInt idx = NIndexData_AS_INT(data);
+                nr_intp real_index = NIndexInt_INDEX(idx);
+                nr_intp index = (real_index < 0) ? (base_shape[dim] + real_index) : real_index;
+
+                if (index < 0 || index >= base_shape[dim]){
+                    NError_RaiseError(
+                        NError_IndexError,
+                        "Index %lld out of bounds for axis %d with size %lld",
+                        (nr_long)real_index, dim, (nr_long)base_shape[dim]
+                    );
+                    return NULL;
+                }
+
+                offset += index * base_strides[dim];
+                dim ++;
+                break;
+            }
+
+            case NIndexRuleType_Slice: {
+                NIndexSlice slice = NIndexData_AS_SLICE(data);
+                nr_intp step = NIndexSlice_STEP(slice);
+                nr_intp dim_size = base_shape[dim];
+
+                if (step == 0) {
+                    NError_RaiseError(NError_IndexError, "Slice step cannot be zero for axis %d", dim);
+                    return NULL;
+                }
+
+                /* Apply defaults and normalize */
+                nr_intp start = NIndexSlice_HAS_START(slice) ? NIndexSlice_START(slice) : (step > 0 ? 0 : dim_size - 1);
+                nr_intp stop = NIndexSlice_HAS_STOP(slice) ? NIndexSlice_STOP(slice) : (step > 0 ? dim_size : -1);
+                
+                if (start < 0) start += dim_size;
+                if (stop < 0 && step > 0) stop += dim_size;
+                
+                /* Clamp */
+                start = start < 0 ? (step > 0 ? 0 : -1) : (start > dim_size ? (step > 0 ? dim_size : dim_size - 1) : start);
+                stop = stop < 0 ? -1 : (stop > dim_size ? dim_size : stop);
+
+                /* Error check for invalid slice direction */
+                if ((step > 0 && start > stop) || (step < 0 && start < stop)) {
+                    NError_RaiseError(
+                        NError_IndexError,
+                        "Slice [%lld:%lld:%lld] would select no elements on axis %d with size %lld",
+                        (nr_long)NIndexSlice_START(slice), (nr_long)NIndexSlice_STOP(slice),
+                        (nr_long)NIndexSlice_STEP(slice), dim, (nr_long)dim_size
+                    );
+                    return NULL;
+                }
+
+                /* Compute length */
+                nr_intp length = (step > 0) ? (stop - start + step - 1) / step : (start - stop - step - 1) / (-step);
+
+                /* Update output */
+                offset += start * base_strides[dim];
+                tstrides[tdim] = base_strides[dim] * step;
+                tshape[tdim] = length;
+                tdim++;
+                dim++;
+                break;
+            }
+
+            case NIndexRuleType_NewAxis: {
+                tshape[tdim] = 1;
+                tstrides[tdim] = 0;
+                tdim++;
+                break;
+            }
+
+            case NIndexRuleType_Ellipsis: {
+                int remaining_dims = ndim - num_rules + 1 + info->new_axis_dims;
+
+                for (int j = 0; j < remaining_dims; j++){
+                    tstrides[tdim] = base_strides[dim];
+                    tshape[tdim] = base_shape[dim];
+                    dim++;
+                    tdim++;
+                }
+                break;
+            }
+
+            default: {
+                dim++;
+                break;
+            }
+        }
+    }
+
+    // Remaining dimensions
+    while (dim < ndim){
+        tshape[tdim] = base_shape[dim];
+        tstrides[tdim] = base_strides[dim];
+        dim++;
+        tdim++;
+    }
+
+    nnii->out_ndim = tdim;
+    return data_ptr + offset;
+}
+
+NR_STATIC_INLINE Node*
+index_through_multi_index_node(Node* base_node, nr_intp offset, 
+                               node_indices_info* nii,
+                               int remaining_dims,
+                               nr_intp* remaining_shape,
+                               nr_intp* remaining_strides)
+{
+    // Allocate NMultiIter on heap to prevent stack overflow
+    NMultiIter* mit = malloc(sizeof(NMultiIter));
+    if (!mit) {
+        NError_RaiseError(NError_ValueError, "Failed to allocate memory for NMultiIter");
+        return NULL;
+    }
+    
+    if (NMultiIter_FromNodes(nii->nodes, nii->node_count, mit) < 0) {
+        free(mit);
+        return NULL;
+    }
+    
+    char* node_data = (char*)NODE_DATA(base_node) + offset;
+    char* out_data = NULL;
+    nr_size_t bsize = NDtype_Size(NODE_DTYPE(base_node));
+    NR_DTYPE dtype = NODE_DTYPE(base_node);
+
+    if (remaining_dims <= 0){
+        nr_size_t nitems = NR_NItems(mit->out_ndim, mit->out_shape);
+        out_data = malloc(nitems * bsize);
+        if (!out_data){
+            free(mit);
+            NError_RaiseMemoryError();
             return NULL;
         }
 
-        // Normalize negative indices
-        if (start < 0) start += dim_size;
-        if (stop < 0) stop += dim_size;
-
-        // Clamp to valid range
-        if (start < 0) start = (step > 0) ? 0 : -1;
-        if (start > dim_size) start = (step > 0) ? dim_size : dim_size;
-        if (stop < 0) stop = (step > 0) ? 0 : -1;
-        if (stop > dim_size) stop = (step > 0) ? dim_size : dim_size;
-
-        // Calculate new dimension size
-        nr_intp new_dim_size;
-        if (step > 0) {
-            new_dim_size = (stop > start) ? ((stop - start + step - 1) / step) : 0;
-        } else {
-            new_dim_size = (start > stop) ? ((start - stop - step - 1) / (-step)) : 0;
-        }
-
-        // Accumulate offset for this dimension
-        total_offset += start * NODE_STRIDES(node)[dim];
+        char* temp_data_ptr = out_data;
+        int num_iters = mit->n_iter;
+        nr_intp step = 0;
         
-        // Update shape and stride for this dimension
-        NODE_SHAPE(nout)[dim] = new_dim_size;
-        NODE_STRIDES(nout)[dim] = NODE_STRIDES(node)[dim] * step;
-    }
+        NMultiIter_ITER(mit);
+        while (NMultiIter_NOTDONE(mit)){
+            for (int i = 0; i < num_iters; i++){
+                int in_node_dim = nii->in_node_dims[i];
+                step += (*(nr_int64*)NMultiIter_ITEM(mit, i)) * NODE_STRIDES(base_node)[in_node_dim];
+            }
 
-    // Apply the total offset to the data pointer
-    nout->data = (char*)node->data + total_offset;
-
-    // Set base reference to source node and increment refcount
-    if (nout->base != node) {
-        nout->base = (Node*)node;
-        ((Node*)node)->ref_count++;
-    }
-
-    // Mark as not owning data and update flags
-    NR_RMVFLG(nout->flags, NR_NODE_OWNDATA);
-    NR_SETFLG(nout->flags, NR_NODE_STRIDED);
-    NR_RMVFLG(nout->flags, NR_NODE_CONTIGUOUS);
-
-    return nout;
-}
-
-
-NR_PUBLIC Node*
-Node_BooleanMask(const Node* node, const Node* bool_mask){
-    if (!node || !bool_mask){
-        NError_RaiseError(NError_ValueError, "Node and boolean mask cannot be NULL.");
-        return NULL;
-    }
-
-    if (NODE_DTYPE(bool_mask) != NR_BOOL){
-        NError_RaiseError(NError_ValueError, 
-            "Boolean mask has invalid data type. Expected boolean type.");
-        return NULL;
-    }
-
-    // Both must have the same shape
-    if (!Node_SameShape(node, bool_mask)){
-        NError_RaiseError(NError_ValueError, 
-            "Node and boolean mask must have the same shape.");
-        return NULL;
-    }
-
-    // Count number of true elements in the boolean mask
-    nr_intp nitems = Node_NItems(node);
-    nr_intp true_count = 0;
-    
-    if (NODE_IS_CONTIGUOUS(bool_mask)){
-        // Fast path for contiguous boolean mask
-        char* mask_data = (char*)NODE_DATA(bool_mask);
-        for (nr_intp i = 0; i < nitems; i++){
-            if (mask_data[i]) true_count++;
+            memcpy(temp_data_ptr, node_data + step, bsize);
+            temp_data_ptr += bsize;
+            step = 0;
+            NMultiIter_NEXT(mit);
         }
-    } else {
-        // General case for strided boolean mask
-        NIter it;
-        NIter_FromNode(&it, bool_mask, NITER_MODE_STRIDED);
-        NIter_ITER(&it);
-        while (NIter_NOTDONE(&it)){
-            if (*(char*)NIter_ITEM(&it)) true_count++;
-            NIter_NEXT(&it);
-        }
+
+        Node* result = Node_New(out_data, 1, mit->out_ndim, mit->out_shape, dtype);
+        free(mit);
+        return result;
     }
 
+    int tndim = mit->out_ndim + remaining_dims;
+    nr_intp tshape[NR_NODE_MAX_NDIM];
 
-    // Create new node for the result
-    Node* result = Node_NewEmpty(1, &true_count, node->dtype.dtype);
-    if (!result){
+    memcpy(tshape, mit->out_shape, sizeof(nr_intp) * mit->out_ndim);
+    memcpy(&tshape[mit->out_ndim], remaining_shape, sizeof(nr_intp) * remaining_dims);
+
+    nr_size_t nitems = NR_NItems(tndim, tshape);
+    out_data = malloc(nitems * bsize);
+    if (!out_data){
+        free(mit);
         NError_RaiseMemoryError();
         return NULL;
     }
 
-
-    // Fill the new node with selected elements
-    nr_intp bsize = NODE_ITEMSIZE(node);
-    char* src_data = (char*)NODE_DATA(node);
-    char* dst_data = (char*)NODE_DATA(result);
-
-    if (NODE_IS_CONTIGUOUS(bool_mask)){
-        // Fast path for contiguous boolean mask
-        char* mask_data = (char*)NODE_DATA(bool_mask);
-        for (nr_intp i = 0; i < nitems; i++){
-            if (mask_data[i]){
-                memcpy(dst_data, src_data, bsize);
-                dst_data += bsize;
-            }
-            src_data += bsize;
+    char* temp_data_ptr = out_data;
+    int num_iters = mit->n_iter;
+    
+    NCoordIter citer;
+    NCoordIter_New(&citer, remaining_dims, remaining_shape);
+    
+    NMultiIter_ITER(mit);
+    while (NMultiIter_NOTDONE(mit)){
+        // Calculate the base offset from fancy indices with bounds checking
+        nr_intp base_offset = 0;
+        for (int i = 0; i < num_iters; i++) {
+            nr_int64 index_val = *(nr_int64*)NMultiIter_ITEM(mit, i);
+            base_offset += index_val * NODE_STRIDES(base_node)[i];
         }
-    } else {
-        // General case for strided boolean mask
-        NIter it;
-        NIter_FromNode(&it, bool_mask, NITER_MODE_STRIDED);
-        NIter_ITER(&it);
-        while (NIter_NOTDONE(&it)){
-            if (*(char*)NIter_ITEM(&it)){
-                memcpy(dst_data, src_data, bsize);
-                dst_data += bsize;
+
+        NCoordIter_ITER(&citer);
+        while (NCoordIter_NOTDONE(&citer)) {
+            nr_intp offset = base_offset;
+            
+            // Calculate offset using coordinate iterator with bounds checking
+            for (int j = 0; j < remaining_dims; j++) {
+                nr_intp coord = NCoordIter_COORD(&citer, j);
+                offset += coord * remaining_strides[j];
             }
-            NIter_NEXT(&it);
+            
+            memcpy(temp_data_ptr, node_data + offset, bsize);
+            temp_data_ptr += bsize;
+            NCoordIter_NEXT(&citer);
         }
+
+        NMultiIter_NEXT(mit);
     }
 
+    Node* result = Node_New(out_data, 1, tndim, tshape, dtype);
+    free(mit);
     return result;
 }
 
-
-/* ========================================
-   NArray-based indexing implementations
-   ======================================== */
-
-NR_PUBLIC Node*
-Node_IndexWithIntArray(const Node* node, const NArray* indices, int axis){
-    if (!node || !indices){
-        NError_RaiseError(NError_ValueError, "Node and indices cannot be NULL.");
-        return NULL;
-    }
-
-    if (NARRAY_DTYPE(indices) != NR_INT64){
-        NError_RaiseError(NError_TypeError, 
-            "Indices array must be of type NR_INT64 (nr_intp).");
-        return NULL;
-    }
-
-    // Handle scalar node
-    if (NODE_NDIM(node) == 0){
-        NError_RaiseError(NError_IndexError, 
-            "Cannot index a 0-dimensional array.");
-        return NULL;
-    }
-
-    // Normalize axis
-    if (axis < 0){
-        axis += NODE_NDIM(node);
-    }
-
-    if (axis < 0 || axis >= NODE_NDIM(node)){
-        NError_RaiseError(NError_IndexError, 
-            "Axis %d out of bounds for array with %d dimensions.", 
-            axis, NODE_NDIM(node));
-        return NULL;
-    }
-
-    nr_intp num_indices = NARRAY_SIZE(indices);
-    nr_intp axis_size = NODE_SHAPE(node)[axis];
-
-    // Calculate output shape
-    int out_ndim = NODE_NDIM(node) + NARRAY_NDIM(indices) - 1;
-    nr_intp out_shape[NR_NODE_MAX_NDIM];
-    
-    // Copy dimensions before axis
-    int out_idx = 0;
-    for (int i = 0; i < axis; i++){
-        out_shape[out_idx++] = NODE_SHAPE(node)[i];
-    }
-    
-    // Add index array dimensions
-    for (int i = 0; i < NARRAY_NDIM(indices); i++){
-        out_shape[out_idx++] = NARRAY_SHAPE(indices)[i];
-    }
-    
-    // Copy dimensions after axis
-    for (int i = axis + 1; i < NODE_NDIM(node); i++){
-        out_shape[out_idx++] = NODE_SHAPE(node)[i];
-    }
-
-    // Create output node
-    Node* result = Node_NewEmpty(out_ndim, out_shape, NODE_DTYPE(node));
-    if (!result){
-        return NULL;
-    }
-
-    // Get pointers to index data
-    nr_intp* index_data = (nr_intp*)NARRAY_DATA(indices);
-    
-    nr_intp itemsize = NODE_ITEMSIZE(node);
-    nr_intp axis_stride = NODE_STRIDES(node)[axis];
-    
-    // Calculate size of sub-arrays we're copying
-    nr_intp sub_size = 1;
-    for (int i = axis + 1; i < NODE_NDIM(node); i++){
-        sub_size *= NODE_SHAPE(node)[i];
-    }
-    nr_intp sub_bytes = sub_size * itemsize;
-
-    // Calculate outer iterations (before axis)
-    nr_intp outer_size = 1;
-    for (int i = 0; i < axis; i++){
-        outer_size *= NODE_SHAPE(node)[i];
-    }
-
-    char* dst_ptr = (char*)NODE_DATA(result);
-    char* src_base = (char*)NODE_DATA(node);
-
-    // Iterate through all combinations
-    for (nr_intp outer = 0; outer < outer_size; outer++){
-        // Calculate offset for this outer iteration
-        nr_intp outer_offset = 0;
-        nr_intp temp = outer;
-        for (int i = axis - 1; i >= 0; i--){
-            nr_intp coord = temp % NODE_SHAPE(node)[i];
-            outer_offset += coord * NODE_STRIDES(node)[i];
-            temp /= NODE_SHAPE(node)[i];
-        }
-
-        // Iterate through indices
-        for (nr_intp idx = 0; idx < num_indices; idx++){
-            nr_intp index = index_data[idx];
-            
-            // Handle negative indices
-            if (index < 0){
-                index += axis_size;
-            }
-
-            // Check bounds
-            if (index < 0 || index >= axis_size){
-                NError_RaiseError(NError_IndexError, 
-                    "Index %lld out of bounds for axis %d with size %lld.",
-                    (long long)index_data[idx], axis, (long long)axis_size);
-                Node_Free(result);
-                return NULL;
-            }
-
-            // Calculate source offset
-            nr_intp src_offset = outer_offset + index * axis_stride;
-            char* src_ptr = src_base + src_offset;
-
-            // Copy sub-array
-            memcpy(dst_ptr, src_ptr, sub_bytes);
-            dst_ptr += sub_bytes;
-        }
-    }
-
-    return result;
-}
-
-
-NR_PUBLIC Node*
-Node_IndexWithBooleanArray(const Node* node, const NArray* bool_mask){
-    if (!node || !bool_mask){
-        NError_RaiseError(NError_ValueError, "Node and boolean mask cannot be NULL.");
-        return NULL;
-    }
-
-    if (NARRAY_DTYPE(bool_mask) != NR_BOOL){
-        NError_RaiseError(NError_ValueError, 
-            "Boolean mask has invalid data type. Expected boolean type.");
-        return NULL;
-    }
-
-    // Check that shapes match
-    if (NARRAY_NDIM(bool_mask) != NODE_NDIM(node)){
-        NError_RaiseError(NError_ValueError, 
-            "Boolean mask must have same number of dimensions as node. Got %d, expected %d.",
-            NARRAY_NDIM(bool_mask), NODE_NDIM(node));
-        return NULL;
-    }
-
-    for (int i = 0; i < NODE_NDIM(node); i++){
-        if (NARRAY_SHAPE(bool_mask)[i] != NODE_SHAPE(node)[i]){
-            NError_RaiseError(NError_ValueError, 
-                "Boolean mask shape mismatch at dimension %d. Got %lld, expected %lld.",
-                i, (long long)NARRAY_SHAPE(bool_mask)[i], (long long)NODE_SHAPE(node)[i]);
-            return NULL;
-        }
-    }
-
-    // Count number of true elements in the boolean mask
-    nr_intp true_count = 0;
-    nr_bool* mask_data = (nr_bool*)NARRAY_DATA(bool_mask);
-    
-    if (NArray_IsContiguous(bool_mask)){
-        // Fast path for contiguous mask
-        for (nr_intp i = 0; i < NARRAY_SIZE(bool_mask); i++){
-            if (mask_data[i]) true_count++;
-        }
-    } else {
-        // Strided mask - iterate properly
-        for (nr_intp i = 0; i < NARRAY_SIZE(bool_mask); i++){
-            nr_intp coords[NR_NODE_MAX_NDIM];
-            nr_intp temp = i;
-            for (int j = NARRAY_NDIM(bool_mask) - 1; j >= 0; j--){
-                coords[j] = temp % NARRAY_SHAPE(bool_mask)[j];
-                temp /= NARRAY_SHAPE(bool_mask)[j];
-            }
-            
-            nr_bool* mask_item = (nr_bool*)NArray_GetItem(bool_mask, coords);
-            if (mask_item && *mask_item) true_count++;
-        }
-    }
-
-    // Create result node (1D array with true_count elements)
-    Node* result = Node_NewEmpty(1, &true_count, NODE_DTYPE(node));
-    if (!result){
-        return NULL;
-    }
-
-    // Fill result with selected elements
-    nr_intp itemsize = NODE_ITEMSIZE(node);
-    char* dst_data = (char*)NODE_DATA(result);
-    nr_intp dst_idx = 0;
-
-    if (NODE_IS_CONTIGUOUS(node) && NArray_IsContiguous(bool_mask)){
-        // Fast path: both contiguous
-        char* src_data = (char*)NODE_DATA(node);
-        for (nr_intp i = 0; i < NARRAY_SIZE(bool_mask); i++){
-            if (mask_data[i]){
-                memcpy(dst_data + dst_idx * itemsize, src_data + i * itemsize, itemsize);
-                dst_idx++;
-            }
-        }
-    } else {
-        // General case: iterate through elements
-        for (nr_intp i = 0; i < NARRAY_SIZE(bool_mask); i++){
-            nr_intp coords[NR_NODE_MAX_NDIM];
-            nr_intp temp = i;
-            for (int j = NARRAY_NDIM(bool_mask) - 1; j >= 0; j--){
-                coords[j] = temp % NARRAY_SHAPE(bool_mask)[j];
-                temp /= NARRAY_SHAPE(bool_mask)[j];
-            }
-            
-            nr_bool* mask_item = (nr_bool*)NArray_GetItem(bool_mask, coords);
-            if (mask_item && *mask_item){
-                // Calculate offset into node data
-                nr_intp offset = 0;
-                for (int j = 0; j < NODE_NDIM(node); j++){
-                    offset += coords[j] * NODE_STRIDES(node)[j];
-                }
-                
-                char* src_ptr = (char*)NODE_DATA(node) + offset;
-                memcpy(dst_data + dst_idx * itemsize, src_ptr, itemsize);
-                dst_idx++;
-            }
-        }
-    }
-
-    return result;
-}
-
-
-NR_PUBLIC Node*
-Node_AdvancedIndex(const Node* node, const NArray** indices, int num_indices, const int* axes){
-    if (!node || !indices){
-        NError_RaiseError(NError_ValueError, "Node and indices cannot be NULL.");
-        return NULL;
-    }
-
-    if (num_indices <= 0 || num_indices > NODE_NDIM(node)){
-        NError_RaiseError(NError_IndexError, 
-            "Invalid number of indices: %d for array with %d dimensions.",
-            num_indices, NODE_NDIM(node));
-        return NULL;
-    }
-
-    // Validate all indices are integer type and get broadcast shape
-    int broadcast_ndim = 0;
-    nr_intp broadcast_shape[NR_NODE_MAX_NDIM];
-    
-    for (int i = 0; i < num_indices; i++){
-        if (!indices[i]){
-            NError_RaiseError(NError_ValueError, "Index array %d is NULL.", i);
-            return NULL;
-        }
-        
-        if (NARRAY_DTYPE(indices[i]) != NR_INT64){
-            NError_RaiseError(NError_TypeError, 
-                "Index array %d must be of type NR_INT64.", i);
-            return NULL;
-        }
-        
-        // Update broadcast shape
-        if (i == 0){
-            broadcast_ndim = NARRAY_NDIM(indices[i]);
-            memcpy(broadcast_shape, NARRAY_SHAPE(indices[i]), 
-                   broadcast_ndim * sizeof(nr_intp));
-        } else {
-            // Simple broadcast check (arrays must have same shape for now)
-            if (NARRAY_NDIM(indices[i]) != broadcast_ndim){
-                NError_RaiseError(NError_ValueError, 
-                    "All index arrays must have the same number of dimensions for broadcasting.");
-                return NULL;
-            }
-            for (int j = 0; j < broadcast_ndim; j++){
-                if (NARRAY_SHAPE(indices[i])[j] != broadcast_shape[j]){
-                    NError_RaiseError(NError_ValueError, 
-                        "Index arrays have incompatible shapes for broadcasting.");
-                    return NULL;
-                }
-            }
-        }
-    }
-
-    // Default axes if not provided
-    int default_axes[NR_NODE_MAX_NDIM];
-    if (!axes){
-        for (int i = 0; i < num_indices; i++){
-            default_axes[i] = i;
-        }
-        axes = default_axes;
-    }
-
-    // Calculate output shape
-    nr_intp total_indices = 1;
-    for (int i = 0; i < broadcast_ndim; i++){
-        total_indices *= broadcast_shape[i];
-    }
-
-    // Output shape = broadcast_shape + remaining node dimensions
-    int out_ndim = broadcast_ndim;
-    nr_intp out_shape[NR_NODE_MAX_NDIM];
-    memcpy(out_shape, broadcast_shape, broadcast_ndim * sizeof(nr_intp));
-    
-    for (int i = 0; i < NODE_NDIM(node); i++){
-        int is_indexed = 0;
-        for (int j = 0; j < num_indices; j++){
-            if (axes[j] == i){
-                is_indexed = 1;
-                break;
-            }
-        }
-        if (!is_indexed){
-            out_shape[out_ndim++] = NODE_SHAPE(node)[i];
-        }
-    }
-
-    // Create output node
-    Node* result = Node_NewEmpty(out_ndim, out_shape, NODE_DTYPE(node));
-    if (!result){
-        return NULL;
-    }
-
-    // Calculate sub-element size (elements in non-indexed dimensions)
-    nr_intp itemsize = NODE_ITEMSIZE(node);
-    nr_intp sub_size = 1;
-    for (int i = 0; i < NODE_NDIM(node); i++){
-        int is_indexed = 0;
-        for (int j = 0; j < num_indices; j++){
-            if (axes[j] == i){
-                is_indexed = 1;
-                break;
-            }
-        }
-        if (!is_indexed){
-            sub_size *= NODE_SHAPE(node)[i];
-        }
-    }
-    nr_intp sub_bytes = sub_size * itemsize;
-
-    char* dst_ptr = (char*)NODE_DATA(result);
-    char* src_base = (char*)NODE_DATA(node);
-
-    // Iterate through all index combinations
-    for (nr_intp idx = 0; idx < total_indices; idx++){
-        // Get coordinates in the broadcast array
-        nr_intp coords[NR_NODE_MAX_NDIM];
-        nr_intp temp = idx;
-        for (int i = broadcast_ndim - 1; i >= 0; i--){
-            coords[i] = temp % broadcast_shape[i];
-            temp /= broadcast_shape[i];
-        }
-
-        // Get the index values for each axis
-        nr_intp node_coords[NR_NODE_MAX_NDIM] = {0};
-        for (int i = 0; i < num_indices; i++){
-            nr_intp* idx_ptr = (nr_intp*)NArray_GetItem(indices[i], coords);
-            if (!idx_ptr){
-                Node_Free(result);
-                return NULL;
-            }
-            
-            nr_intp index = *idx_ptr;
-            int axis = axes[i];
-            
-            // Handle negative indices
-            if (index < 0){
-                index += NODE_SHAPE(node)[axis];
-            }
-            
-            // Check bounds
-            if (index < 0 || index >= NODE_SHAPE(node)[axis]){
-                NError_RaiseError(NError_IndexError, 
-                    "Index %lld out of bounds for axis %d with size %lld.",
-                    (long long)*idx_ptr, axis, (long long)NODE_SHAPE(node)[axis]);
-                Node_Free(result);
-                return NULL;
-            }
-            
-            node_coords[axis] = index;
-        }
-
-        // Calculate source offset
-        nr_intp src_offset = 0;
-        for (int i = 0; i < NODE_NDIM(node); i++){
-            src_offset += node_coords[i] * NODE_STRIDES(node)[i];
-        }
-
-        // Copy data
-        memcpy(dst_ptr, src_base + src_offset, sub_bytes);
-        dst_ptr += sub_bytes;
-    }
-
-    return result;
-}
-
-
-NR_PUBLIC Node*
-Node_Take(const Node* node, const NArray* indices, int axis, int mode){
-    if (!node || !indices){
-        NError_RaiseError(NError_ValueError, "Node and indices cannot be NULL.");
-        return NULL;
-    }
-
-    if (NARRAY_DTYPE(indices) != NR_INT64){
-        NError_RaiseError(NError_TypeError, 
-            "Indices array must be of type NR_INT64.");
-        return NULL;
-    }
-
-    // Handle scalar node
-    if (NODE_NDIM(node) == 0){
-        NError_RaiseError(NError_IndexError, "Cannot take from 0-dimensional array.");
-        return NULL;
-    }
-
-    // Normalize axis
-    if (axis < 0){
-        axis += NODE_NDIM(node);
-    }
-
-    if (axis < 0 || axis >= NODE_NDIM(node)){
-        NError_RaiseError(NError_IndexError, 
-            "Axis %d out of bounds for array with %d dimensions.", 
-            axis, NODE_NDIM(node));
-        return NULL;
-    }
-
-    nr_intp axis_size = NODE_SHAPE(node)[axis];
-    nr_intp num_indices = NARRAY_SIZE(indices);
-    nr_intp* index_data = (nr_intp*)NARRAY_DATA(indices);
-
-    // Calculate output shape
-    nr_intp out_shape[NR_NODE_MAX_NDIM];
-    for (int i = 0; i < NODE_NDIM(node); i++){
-        if (i == axis){
-            out_shape[i] = num_indices;
-        } else {
-            out_shape[i] = NODE_SHAPE(node)[i];
-        }
-    }
-
-    // Create output node
-    Node* result = Node_NewEmpty(NODE_NDIM(node), out_shape, NODE_DTYPE(node));
-    if (!result){
-        return NULL;
-    }
-
-    nr_intp itemsize = NODE_ITEMSIZE(node);
-    nr_intp axis_stride = NODE_STRIDES(node)[axis];
-
-    // Calculate size of sub-arrays
-    nr_intp sub_size = 1;
-    for (int i = axis + 1; i < NODE_NDIM(node); i++){
-        sub_size *= NODE_SHAPE(node)[i];
-    }
-    nr_intp sub_bytes = sub_size * itemsize;
-
-    // Calculate outer size
-    nr_intp outer_size = 1;
-    for (int i = 0; i < axis; i++){
-        outer_size *= NODE_SHAPE(node)[i];
-    }
-
-    char* dst_ptr = (char*)NODE_DATA(result);
-    char* src_base = (char*)NODE_DATA(node);
-
-    // Process indices with mode handling
-    for (nr_intp outer = 0; outer < outer_size; outer++){
-        nr_intp outer_offset = 0;
-        nr_intp temp = outer;
-        for (int i = axis - 1; i >= 0; i--){
-            nr_intp coord = temp % NODE_SHAPE(node)[i];
-            outer_offset += coord * NODE_STRIDES(node)[i];
-            temp /= NODE_SHAPE(node)[i];
-        }
-
-        for (nr_intp idx = 0; idx < num_indices; idx++){
-            nr_intp index = index_data[idx];
-
-            // Apply mode
-            switch (mode){
-                case 0: // error mode
-                    if (index < 0) index += axis_size;
-                    if (index < 0 || index >= axis_size){
-                        NError_RaiseError(NError_IndexError, 
-                            "Index %lld out of bounds for axis %d with size %lld.",
-                            (long long)index_data[idx], axis, (long long)axis_size);
-                        Node_Free(result);
-                        return NULL;
-                    }
-                    break;
-                
-                case 1: // wrap mode
-                    index = ((index % axis_size) + axis_size) % axis_size;
-                    break;
-                
-                case 2: // clip mode
-                    if (index < 0) index = 0;
-                    if (index >= axis_size) index = axis_size - 1;
-                    break;
-                
-                default:
-                    NError_RaiseError(NError_ValueError, 
-                        "Invalid mode: %d. Must be 0 (error), 1 (wrap), or 2 (clip).", mode);
-                    Node_Free(result);
-                    return NULL;
-            }
-
-            nr_intp src_offset = outer_offset + index * axis_stride;
-            memcpy(dst_ptr, src_base + src_offset, sub_bytes);
-            dst_ptr += sub_bytes;
-        }
-    }
-
-    return result;
-}
-
-
-NR_PUBLIC int
-Node_Put(Node* node, const NArray* indices, const Node* values, int mode){
-    if (!node || !indices || !values){
-        NError_RaiseError(NError_ValueError, "Node, indices, and values cannot be NULL.");
-        return -1;
-    }
-
-    if (NARRAY_DTYPE(indices) != NR_INT64){
-        NError_RaiseError(NError_TypeError, 
-            "Indices array must be of type NR_INT64.");
-        return -1;
-    }
-
-    if (NODE_DTYPE(node) != NODE_DTYPE(values)){
-        NError_RaiseError(NError_TypeError, 
-            "Node and values must have the same dtype.");
-        return -1;
-    }
-
-    nr_intp total_size = Node_NItems(node);
-    nr_intp num_indices = NARRAY_SIZE(indices);
-    nr_intp* index_data = (nr_intp*)NARRAY_DATA(indices);
-
-    // Values should have same size as indices or be broadcastable
-    nr_intp num_values = Node_NItems(values);
-    if (num_values != num_indices && num_values != 1){
-        NError_RaiseError(NError_ValueError, 
-            "Values array size (%lld) must match indices size (%lld) or be 1 for broadcasting.",
-            (long long)num_values, (long long)num_indices);
-        return -1;
-    }
-
-    nr_intp itemsize = NODE_ITEMSIZE(node);
-    char* node_data = (char*)NODE_DATA(node);
-    char* values_data = (char*)NODE_DATA(values);
-
-    for (nr_intp i = 0; i < num_indices; i++){
-        nr_intp index = index_data[i];
-
-        // Apply mode
-        switch (mode){
-            case 0: // error mode
-                if (index < 0) index += total_size;
-                if (index < 0 || index >= total_size){
-                    NError_RaiseError(NError_IndexError, 
-                        "Index %lld out of bounds for flattened array with size %lld.",
-                        (long long)index_data[i], (long long)total_size);
+NR_STATIC_INLINE int
+handle_node_indecies(Node* base_node, NIndexRuleSet* rs,
+                    indices_unpack_info* info,
+                    node_indices_info* nii)
+{
+    int num_rules = NIndexRuleSet_NUM_RULES(rs);
+    int dim = 0;
+    nii->node_count = 0;
+
+    for (int i = 0; i < num_rules; i++){
+        NIndexRule* rule = &NIndexRuleSet_RULES(rs)[i];
+        NIndexRuleType type = NIndexRule_TYPE(rule);
+        int temp = 0;
+
+        if (type == NIndexRuleType_Node){
+            NIndexData data = NIndexRule_DATA(rule);
+            NIndexNode index_node_data = NIndexData_AS_NODE(data);
+            Node* indexed_node = NIndexNode_NODE(index_node_data);
+
+            NR_DTYPE ndtype = NODE_DTYPE(indexed_node);
+            if (ndtype != NIndex_INT){
+                Node* converted_node = Node_ToType(NULL, indexed_node, NIndex_INT);
+                if (!converted_node){
+                    free_nodes_in_info(nii);
                     return -1;
                 }
-                break;
-            
-            case 1: // wrap mode
-                index = ((index % total_size) + total_size) % total_size;
-                break;
-            
-            case 2: // clip mode
-                if (index < 0) index = 0;
-                if (index >= total_size) index = total_size - 1;
-                break;
-            
-            default:
-                NError_RaiseError(NError_ValueError, 
-                    "Invalid mode: %d. Must be 0 (error), 1 (wrap), or 2 (clip).", mode);
-                return -1;
+                indexed_node = converted_node;
+                temp = 1;   
+            }
+
+            if (!info->risky_indexing){
+                // Check index bounds
+                NIter iter;
+                NIter_FromNode(&iter, indexed_node, NITER_MODE_NONE);
+                NIter_ITER(&iter);
+                while (NIter_NOTDONE(&iter)){
+                    nr_int64 index_val = *(nr_int64*)NIter_ITEM(&iter);
+                    nr_intp dim_size = NODE_SHAPE(base_node)[dim];
+                    nr_intp idx = (index_val < 0) ? dim_size + index_val : index_val;
+
+                    if (idx < 0 || idx >= dim_size){
+                        NError_RaiseError(
+                            NError_IndexError,
+                            "Index %lld out of bounds for axis %d with size %lld",
+                            (nr_long)index_val, nii->node_count, (nr_long)base_node->shape[nii->node_count]
+                        );
+                        free_nodes_in_info(nii);
+                        return -1;
+                    }
+
+                    NIter_NEXT(&iter);
+                }
+            }
+
+            nii->nodes[nii->node_count] = indexed_node;
+            nii->is_temp[nii->node_count] = temp;
+            nii->in_node_dims[nii->node_count] = dim;
+            nii->node_count++;
+            dim++;
+        }
+        else{
+            if (type != NIndexRuleType_NewAxis){
+                dim++;
+            }
+        }
+    }
+    
+    return 0;
+}
+
+
+NR_STATIC_INLINE Node*
+index_flat_bool_indexing(Node* base_node, NIndexRuleSet* rs){
+    NIndexRule* rule = &NIndexRuleSet_RULES(rs)[0];
+    NIndexData data = NIndexRule_DATA(rule);
+    NIndexNode index_node_data = NIndexData_AS_NODE(data);
+    Node* index_node = NIndexNode_NODE(index_node_data);
+
+    char* base_data = (char*)NODE_DATA(base_node);
+
+    int is_same_shape = Node_SameShape(base_node, index_node);
+    int is_index_c = NODE_IS_CONTIGUOUS(index_node);
+    int is_base_c = NODE_IS_CONTIGUOUS(base_node);
+
+    char* out_data = NULL;
+    nr_intp correct_count = 0;
+
+    if (is_same_shape){
+        nr_intp nitems = NR_NItems(base_node->ndim, base_node->shape);
+        nr_size_t bsize = NDtype_Size(NODE_DTYPE(base_node));
+        char* temp_data = malloc(nitems * bsize);
+        if (!temp_data){
+            NError_RaiseMemoryError();
+            return NULL;
         }
 
-        // Calculate offset in flattened array
-        nr_intp offset = index * itemsize;
+        // Same Shape, both nodes contiguous
+        if (is_index_c && is_base_c){
+            nr_intp current = 0;
+            for (nr_intp i = 0; i < nitems; i++){
+                nr_bool val = ((nr_bool*)index_node->data)[i];
+                if (val){
+                    memcpy(temp_data + current, base_data + i * bsize, bsize);
+                    current += bsize;
+                    correct_count++;
+                }
+            }
+        }
+
+        // Same Shape, index is contiguous but base is not
+        else if (is_index_c){
+            nr_intp current = 0;
+            NIter iter;
+            NIter_FromNode(&iter, base_node, NITER_MODE_NONE);
+
+            NIter_ITER(&iter);
+            nr_intp i = 0;
+            while (NIter_NOTDONE(&iter)){
+                nr_bool val = ((nr_bool*)index_node->data)[i];
+                if (val){
+                    memcpy(temp_data + current, NIter_ITEM(&iter), bsize);
+                    current += bsize;
+                    correct_count++;
+                }
+                NIter_NEXT(&iter);
+                i++;
+            }
+        }
+
+        // Same Shape, base is contiguous but index is not
+        else if (is_base_c){
+            nr_intp current = 0;
+            NIter iter;
+            NIter_FromNode(&iter, index_node, NITER_MODE_NONE);
+
+            NIter_ITER(&iter);
+            nr_intp i = 0;
+            while (NIter_NOTDONE(&iter)){
+                nr_bool val = *(nr_bool*)NIter_ITEM(&iter);
+                if (val){
+                    memcpy(temp_data + current, base_data + i * bsize, bsize);
+                    current += bsize;
+                    correct_count++;
+                }
+                NIter_NEXT(&iter);
+                i++;
+            }
+        }
         
-        // Get value to put (broadcast if only one value)
-        char* value_ptr = (num_values == 1) ? values_data : (values_data + i * itemsize);
-        
-        // Copy value
-        memcpy(node_data + offset, value_ptr, itemsize);
+        else{
+            nr_intp current = 0;
+            NIter base_iter;
+            NIter_FromNode(&base_iter, base_node, NITER_MODE_NONE);
+            NIter index_iter;
+            NIter_FromNode(&index_iter, index_node, NITER_MODE_NONE);
+
+            NIter_ITER(&base_iter);
+            NIter_ITER(&index_iter);
+            while (NIter_NOTDONE(&base_iter) && NIter_NOTDONE(&index_iter)){
+                nr_bool val = *(nr_bool*)NIter_ITEM(&index_iter);
+                if (val){
+                    memcpy(temp_data + current, NIter_ITEM(&base_iter), bsize);
+                    current += bsize;
+                    correct_count++;
+                }
+                NIter_NEXT(&base_iter);
+                NIter_NEXT(&index_iter);
+            }
+        }
+
+        out_data = malloc(correct_count * bsize);
+        if (!out_data){
+            free(temp_data);
+            NError_RaiseMemoryError();
+            return NULL;
+        }
+
+        memcpy(out_data, temp_data, correct_count * bsize);
+        free(temp_data);
+    }
+    else{
+        Node* nodes[] = {base_node, index_node};
+        NMultiIter mit;
+        if (NMultiIter_FromNodes(nodes, 2, &mit) < 0){
+            return NULL;
+        }
+
+        nr_intp nitems = NR_NItems(mit.out_ndim, mit.out_shape);
+        nr_size_t bsize = NDtype_Size(NODE_DTYPE(base_node));
+        char* temp_data = malloc(nitems * bsize);
+        if (!temp_data){
+            NError_RaiseMemoryError();
+            return NULL;
+        }
+
+        char* temp_data_ptr = temp_data;
+
+        NMultiIter_ITER(&mit);
+        while (NMultiIter_NOTDONE(&mit)){
+            nr_bool val = *(nr_bool*)NMultiIter_ITEM(&mit, 1);
+            if (val){
+                memcpy(temp_data_ptr, NMultiIter_ITEM(&mit, 0), bsize);
+                temp_data_ptr += bsize;
+                correct_count++;
+            }
+            NMultiIter_NEXT2(&mit);
+        }
     }
 
-    return 0;
+    if (!out_data){
+        return NULL;
+    }
+
+    return Node_New(
+        out_data,
+        1,
+        1,
+        (nr_intp[]){correct_count},
+        NODE_DTYPE(base_node)
+    );
+}
+
+NR_STATIC_INLINE Node*
+index_mixed_indexing(Node* base_node, NIndexRuleSet* rs, indices_unpack_info* info){
+    no_node_indices_info nnii;
+    char* data_ptr = handle_non_node_indices(
+        (char*)NODE_DATA(base_node),
+        NODE_NDIM(base_node),
+        NODE_SHAPE(base_node),
+        NODE_STRIDES(base_node),
+        rs,
+        info,
+        &nnii
+    );
+    if (!data_ptr){
+        return NULL;
+    }
+
+    int remaining_dims = nnii.out_ndim;
+    nr_intp* remaining_shape = nnii.out_shape;
+    nr_intp* remaining_strides = nnii.out_strides;
+
+    node_indices_info nii;
+    if (handle_node_indecies(base_node, rs, info, &nii) < 0){
+        return NULL;
+    }
+
+    Node* result_node = index_through_multi_index_node(
+        base_node,
+        data_ptr - (char*)NODE_DATA(base_node),
+        &nii,
+        remaining_dims,
+        remaining_shape,
+        remaining_strides
+    );
+
+    free_nodes_in_info(&nii);
+    return result_node;
+}
+
+NR_STATIC_INLINE Node*
+index_only_node_indexing(Node* base_node, NIndexRuleSet* rs, indices_unpack_info* info){
+    node_indices_info nii;
+    if (handle_node_indecies(base_node, rs, info, &nii) < 0){
+        return NULL;
+    }
+
+    int remaining_dims = base_node->ndim - nii.node_count;
+    nr_intp* remaining_shape = &base_node->shape[nii.node_count];
+    nr_intp* remaining_strides = &base_node->strides[nii.node_count];
+    
+    Node* result_node = index_through_multi_index_node(
+        base_node,
+        0,
+        &nii,
+        remaining_dims,
+        remaining_shape,
+        remaining_strides
+    );
+
+    free_nodes_in_info(&nii);
+    return result_node;
+}
+
+NR_STATIC_INLINE Node*
+index_node(Node* base_node, NIndexRuleSet* rs, indices_unpack_info* info){
+    int has_bool_index = info->index_type & HAS_BOOL;
+    int num_rules = NIndexRuleSet_NUM_RULES(rs);
+
+    if (num_rules == 1 && has_bool_index){
+        return index_flat_bool_indexing(base_node, rs);
+    }
+
+    if (info->index_type &~ (HAS_NODE | HAS_BOOL)) {
+        return index_mixed_indexing(base_node, rs, info);
+    }
+
+    return index_only_node_indexing(base_node, rs, info);
+}
+
+NR_STATIC_INLINE Node*
+index_non_nodes(Node* base_node, NIndexRuleSet* rs, indices_unpack_info* info){
+    no_node_indices_info nnii;
+    char* data_ptr = handle_non_node_indices(
+        (char*)NODE_DATA(base_node),
+        NODE_NDIM(base_node),
+        NODE_SHAPE(base_node),
+        NODE_STRIDES(base_node),
+        rs,
+        info,
+        &nnii
+    );
+
+    if (!data_ptr){
+        return NULL;
+    }
+
+    if (info->copy_needed){
+        nr_intp nitems = NR_NItems(nnii.out_ndim, nnii.out_shape);
+        nr_size_t bsize = NDtype_Size(NODE_DTYPE(base_node));
+        char* data = malloc(nitems * bsize);
+        if (!data){
+            NError_RaiseMemoryError();
+            return NULL;
+        }
+
+        NIter iter;
+        NIter_New(&iter, data_ptr, nnii.out_ndim, nnii.out_shape, nnii.out_strides, NITER_MODE_STRIDED);
+        NIter_ITER(&iter);
+
+        char* dest_ptr = data;
+        while (NIter_NOTDONE(&iter)){
+            memcpy(dest_ptr, NIter_ITEM(&iter), bsize);
+            dest_ptr += bsize;
+            NIter_NEXT(&iter);
+        }
+
+        return Node_New(
+            data,
+            1,
+            nnii.out_ndim,
+            nnii.out_shape,
+            NODE_DTYPE(base_node)
+        );
+    }
+
+    return Node_NewChild(
+        base_node,
+        nnii.out_ndim,
+        nnii.out_shape,
+        nnii.out_strides,
+        data_ptr - (char*)NODE_DATA(base_node)
+    );
+}
+
+
+NR_STATIC_INLINE Node*
+node_index(Node* base_node, NIndexRuleSet* rs, int risky_indexing){
+    int num_rules = NIndexRuleSet_NUM_RULES(rs);
+    if (num_rules == 0){
+        // No indexing rules, return a view of the base node
+        return Node_NewChild(
+            base_node,
+            base_node->ndim,
+            base_node->shape,
+            base_node->strides,
+            0
+        );
+    }
+    
+    indices_unpack_info info;
+    if (unpack_indices(rs, &info) < 0){
+        return NULL;
+    }
+    info.risky_indexing = risky_indexing;
+    
+    int ndim = base_node->ndim;
+    int num_used_dims = num_rules - info.new_axis_dims;
+    int ellipsis_dims = ndim - num_rules + 1 + info.new_axis_dims;
+    if (info.index_type & HAS_ELLIPSIS){
+        num_used_dims += ellipsis_dims - 1;
+    }
+
+    if (num_used_dims > base_node->ndim){
+        NError_RaiseError(
+            NError_IndexError,
+            "Too many indices for array: array is %d-dimensional, "
+            "but %d were indexed",
+            base_node->ndim,
+            num_used_dims
+        );
+        return NULL;
+    }
+
+    int num_keeped_dims = info.keeped_dims;
+    if (info.index_type & HAS_ELLIPSIS){
+        num_keeped_dims += ellipsis_dims;
+    }
+    int out_dim = num_keeped_dims + info.new_axis_dims;
+    
+    if (out_dim > NR_NODE_MAX_NDIM){
+        NError_RaiseError(
+            NError_IndexError,
+            "Resulting array has too many dimensions: %d > %d",
+            out_dim,
+            NR_NODE_MAX_NDIM
+        );
+        return NULL;
+    }
+
+
+    if (info.index_type & HAS_NODE){
+        return index_node(base_node, rs, &info);
+    }
+
+    return index_non_nodes(base_node, rs, &info);
+}
+
+NR_PUBLIC Node*
+Node_RealIndex(Node* base_node, NIndexRuleSet* rs){
+    return node_index(base_node, rs, 0);
+}
+
+NR_PUBLIC Node*
+Node_RiskyIndex(Node* base_node, NIndexRuleSet* rs){
+    return node_index(base_node, rs, 1);
 }
