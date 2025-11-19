@@ -7,17 +7,24 @@ NTools_BroadcastStrides(nr_intp* a_shape, int a_ndim,
                         int src_ndim, nr_intp* out_strides)
 {
     if (src_ndim < a_ndim){
+        NError_RaiseError(NError_ValueError,
+            "cannot broadcast strides: source ndim %d is less than array ndim %d",
+            src_ndim, a_ndim);
         return -1;
     }
 
-    for (int i = 0; i < src_ndim; i++){
-        if (src_shape[i] == a_shape[i]){
+    int d = src_ndim - a_ndim;
+    for (int i = 0; i < a_ndim; i++){
+        if (src_shape[i + d] == a_shape[i]){
             out_strides[i] = a_strides[i];
         }
         else if (a_shape[i] == 1){
             out_strides[i] = 0;
         }
         else{
+            NError_RaiseError(NError_ValueError,
+                "cannot broadcast strides: incompatible dimension at index %d (source: %lld, array: %lld)",
+                i, (long long)src_shape[i + d], (long long)a_shape[i]);
             return -1;
         }
     }
@@ -65,7 +72,7 @@ NTools_ShapeAsString(nr_intp* shape, int ndim, char str[]) {
     int current = 1;
 
     for (int i = 0; i < ndim; i++) {
-        int len = snprintf(str + current, 20, "%llu", shape[i]);
+        int len = snprintf(str + current, 20, "%lld", (long long)shape[i]);
         current += len;
 
         if (i < ndim - 1) {
