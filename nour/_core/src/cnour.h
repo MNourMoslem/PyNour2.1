@@ -13,5 +13,6 @@
 #include "shape.h"
 #include "operations.h"
 #include "index.h"
+#include "nmath.h"
 
 #endif // NOUR__CORE_SRC_CNOUR_H
