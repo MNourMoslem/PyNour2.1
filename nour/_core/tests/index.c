@@ -1320,6 +1320,436 @@ int test_index_single_element_fancy() {
 }
 
 // ============================================================================
+// STRING PARSING TESTS
+// ============================================================================
+
+int test_index_string_integer() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("5");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Int) {
+        printf("Expected Int rule type\n");
+        return 0;
+    }
+    
+    if (NIndexRule_DATA_AS_INT(rule).index != 5) {
+        printf("Expected index 5, got %lld\n", NIndexRule_DATA_AS_INT(rule).index);
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_negative_integer() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("-3");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Int) {
+        printf("Expected Int rule type\n");
+        return 0;
+    }
+    
+    if (NIndexRule_DATA_AS_INT(rule).index != -3) {
+        printf("Expected index -3, got %lld\n", NIndexRule_DATA_AS_INT(rule).index);
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_simple_slice() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("1:5");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (!NIndexSlice_HAS_START(slice) || NIndexSlice_START(slice) != 1) {
+        printf("Expected start=1, got start=%lld, has_start=%d\n", 
+               NIndexSlice_START(slice), NIndexSlice_HAS_START(slice));
+        return 0;
+    }
+    
+    if (!NIndexSlice_HAS_STOP(slice) || NIndexSlice_STOP(slice) != 5) {
+        printf("Expected stop=5, got stop=%lld, has_stop=%d\n", 
+               NIndexSlice_STOP(slice), NIndexSlice_HAS_STOP(slice));
+        return 0;
+    }
+    
+    if (NIndexSlice_STEP(slice) != 1) {
+        printf("Expected step=1, got step=%lld\n", NIndexSlice_STEP(slice));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_slice_with_step() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("0:10:2");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (NIndexSlice_START(slice) != 0 || NIndexSlice_STOP(slice) != 10 || NIndexSlice_STEP(slice) != 2) {
+        printf("Expected 0:10:2, got %lld:%lld:%lld\n", 
+               NIndexSlice_START(slice), NIndexSlice_STOP(slice), NIndexSlice_STEP(slice));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_full_slice() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString(":");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (NIndexSlice_HAS_START(slice) || NIndexSlice_HAS_STOP(slice)) {
+        printf("Expected no start/stop for full slice\n");
+        return 0;
+    }
+    
+    if (NIndexSlice_STEP(slice) != 1) {
+        printf("Expected step=1, got step=%lld\n", NIndexSlice_STEP(slice));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_slice_no_start() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString(":7");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (NIndexSlice_HAS_START(slice)) {
+        printf("Expected no start for :7 slice\n");
+        return 0;
+    }
+    
+    if (!NIndexSlice_HAS_STOP(slice) || NIndexSlice_STOP(slice) != 7) {
+        printf("Expected stop=7, got stop=%lld, has_stop=%d\n", 
+               NIndexSlice_STOP(slice), NIndexSlice_HAS_STOP(slice));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_slice_no_stop() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("3:");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (!NIndexSlice_HAS_START(slice) || NIndexSlice_START(slice) != 3) {
+        printf("Expected start=3, got start=%lld, has_start=%d\n", 
+               NIndexSlice_START(slice), NIndexSlice_HAS_START(slice));
+        return 0;
+    }
+    
+    if (NIndexSlice_HAS_STOP(slice)) {
+        printf("Expected no stop for 3: slice\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_negative_step() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("10:0:-2");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (NIndexSlice_STEP(slice) != -2) {
+        printf("Expected step=-2, got step=%lld\n", NIndexSlice_STEP(slice));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_newaxis() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("None");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_NewAxis) {
+        printf("Expected NewAxis rule type\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_newaxis_np() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("np.newaxis");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_NewAxis) {
+        printf("Expected NewAxis rule type\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_ellipsis() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("...");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Ellipsis) {
+        printf("Expected Ellipsis rule type\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_multiple_comma() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("1, :, -2");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 3) {
+        printf("Expected 3 rules, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    // Check first rule (integer 1)
+    NIndexRule* rule1 = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule1) != NIndexRuleType_Int || NIndexRule_DATA_AS_INT(rule1).index != 1) {
+        printf("Expected first rule to be Int(1)\n");
+        return 0;
+    }
+    
+    // Check second rule (full slice)
+    NIndexRule* rule2 = &NIndexRuleSet_RULE(&rs, 1);
+    if (NIndexRule_TYPE(rule2) != NIndexRuleType_Slice) {
+        printf("Expected second rule to be Slice\n");
+        return 0;
+    }
+    
+    // Check third rule (integer -2)
+    NIndexRule* rule3 = &NIndexRuleSet_RULE(&rs, 2);
+    if (NIndexRule_TYPE(rule3) != NIndexRuleType_Int || NIndexRule_DATA_AS_INT(rule3).index != -2) {
+        printf("Expected third rule to be Int(-2)\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_complex_mixed() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("0, 2:8:2, None, ..., -1");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 5) {
+        printf("Expected 5 rules, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    // Check integer 0
+    NIndexRule* rule1 = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule1) != NIndexRuleType_Int || NIndexRule_DATA_AS_INT(rule1).index != 0) {
+        printf("Expected rule 0 to be Int(0)\n");
+        return 0;
+    }
+    
+    // Check slice 2:8:2
+    NIndexRule* rule2 = &NIndexRuleSet_RULE(&rs, 1);
+    if (NIndexRule_TYPE(rule2) != NIndexRuleType_Slice) {
+        printf("Expected rule 1 to be Slice\n");
+        return 0;
+    }
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule2);
+    if (NIndexSlice_START(slice) != 2 || NIndexSlice_STOP(slice) != 8 || NIndexSlice_STEP(slice) != 2) {
+        printf("Expected slice 2:8:2\n");
+        return 0;
+    }
+    
+    // Check newaxis
+    NIndexRule* rule3 = &NIndexRuleSet_RULE(&rs, 2);
+    if (NIndexRule_TYPE(rule3) != NIndexRuleType_NewAxis) {
+        printf("Expected rule 2 to be NewAxis\n");
+        return 0;
+    }
+    
+    // Check ellipsis
+    NIndexRule* rule4 = &NIndexRuleSet_RULE(&rs, 3);
+    if (NIndexRule_TYPE(rule4) != NIndexRuleType_Ellipsis) {
+        printf("Expected rule 3 to be Ellipsis\n");
+        return 0;
+    }
+    
+    // Check integer -1
+    NIndexRule* rule5 = &NIndexRuleSet_RULE(&rs, 4);
+    if (NIndexRule_TYPE(rule5) != NIndexRuleType_Int || NIndexRule_DATA_AS_INT(rule5).index != -1) {
+        printf("Expected rule 4 to be Int(-1)\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_with_brackets() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("[1:5, None, -1]");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 3) {
+        printf("Expected 3 rules, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    // Should work the same as without brackets
+    return 1;
+}
+
+int test_index_string_with_whitespace() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("  1 : 5 ,   None  , -1  ");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 3) {
+        printf("Expected 3 rules, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    // Check that whitespace was handled correctly
+    NIndexRule* rule1 = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule1) != NIndexRuleType_Slice) {
+        printf("Expected first rule to be Slice\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_empty() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 0) {
+        printf("Expected 0 rules for empty string, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_only_brackets() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("[]");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 0) {
+        printf("Expected 0 rules for '[]', got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    return 1;
+}
+
+int test_index_string_step_only() {
+    NIndexRuleSet rs = NIndexRuleSet_NewFromString("::3");
+    
+    if (NIndexRuleSet_NUM_RULES(&rs) != 1) {
+        printf("Expected 1 rule, got %d\n", (int)NIndexRuleSet_NUM_RULES(&rs));
+        return 0;
+    }
+    
+    NIndexRule* rule = &NIndexRuleSet_RULE(&rs, 0);
+    if (NIndexRule_TYPE(rule) != NIndexRuleType_Slice) {
+        printf("Expected Slice rule type\n");
+        return 0;
+    }
+    
+    NIndexSlice slice = NIndexRule_DATA_AS_SLICE(rule);
+    if (NIndexSlice_STEP(slice) != 3) {
+        printf("Expected step=3, got step=%lld\n", NIndexSlice_STEP(slice));
+        return 0;
+    }
+    
+    if (NIndexSlice_HAS_START(slice) || NIndexSlice_HAS_STOP(slice)) {
+        printf("Expected no start/stop for ::3 slice\n");
+        return 0;
+    }
+    
+    return 1;
+}
+
+// ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
 
@@ -1388,6 +1818,26 @@ void test_index() {
         test_index_complex_fancy,
         test_index_newaxis_ellipsis_combination,
         test_index_single_element_fancy,
+        
+        // String parsing tests
+        test_index_string_integer,
+        test_index_string_negative_integer,
+        test_index_string_simple_slice,
+        test_index_string_slice_with_step,
+        test_index_string_full_slice,
+        test_index_string_slice_no_start,
+        test_index_string_slice_no_stop,
+        test_index_string_negative_step,
+        test_index_string_newaxis,
+        test_index_string_newaxis_np,
+        test_index_string_ellipsis,
+        test_index_string_multiple_comma,
+        test_index_string_complex_mixed,
+        test_index_string_with_brackets,
+        test_index_string_with_whitespace,
+        test_index_string_empty,
+        test_index_string_only_brackets,
+        test_index_string_step_only,
     };
     
     int num_tests = sizeof(tests) / sizeof(tests[0]);

@@ -72,6 +72,9 @@ NIndexRuleSet_AddEllipsis(NIndexRuleSet* rs);
 NR_PUBLIC int
 NIndexRuleSet_AddNode(NIndexRuleSet* rs, Node* index_node);
 
+NR_PUBLIC NIndexRuleSet
+NIndexRuleSet_NewFromString(const char* index_string);
+
 NR_PUBLIC void
 NIndexRuleSet_Cleanup(NIndexRuleSet* rs);
 

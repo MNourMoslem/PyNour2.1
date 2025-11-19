@@ -121,6 +121,137 @@ NIndexRuleSet_Cleanup(NIndexRuleSet* rs) {
     rs->num_rules = 0;
 }
 
+NR_PUBLIC NIndexRuleSet
+NIndexRuleSet_NewFromString(const char* index_string) {
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    
+    if (!index_string || *index_string == '\0') {
+        return rs;
+    }
+    
+    const char* ptr = index_string;
+    
+    // Skip whitespace and opening bracket if present
+    while (*ptr == ' ' || *ptr == '\t') ptr++;
+    if (*ptr == '[') ptr++;
+    
+    while (*ptr != '\0' && *ptr != ']') {
+        // Skip whitespace
+        while (*ptr == ' ' || *ptr == '\t') ptr++;
+        
+        if (*ptr == '\0' || *ptr == ']') break;
+        
+        // Handle comma separator
+        if (*ptr == ',') {
+            ptr++;
+            continue;
+        }
+        
+        // Handle newaxis (None)
+        if (strncmp(ptr, "None", 4) == 0 || strncmp(ptr, "np.newaxis", 10) == 0) {
+            NIndexRuleSet_AddNewAxis(&rs);
+            if (strncmp(ptr, "None", 4) == 0) {
+                ptr += 4;
+            } else {
+                ptr += 10;
+            }
+        }
+        // Handle ellipsis
+        else if (strncmp(ptr, "...", 3) == 0) {
+            NIndexRuleSet_AddEllipsis(&rs);
+            ptr += 3;
+        }
+        // Handle colon (full slice)
+        else if (*ptr == ':') {
+            // Parse slice: [start]:[stop]:[step]
+            nr_intp start = 0, stop = 0, step = 1;
+            nr_bool has_start = 0, has_stop = 0;
+            
+            ptr++; // skip first colon
+            
+            // Check if there's a stop value
+            if (*ptr != ':' && *ptr != ',' && *ptr != ']' && *ptr != '\0') {
+                char* endptr;
+                stop = strtol(ptr, &endptr, 10);
+                if (endptr != ptr) {
+                    has_stop = 1;
+                    ptr = endptr;
+                }
+            }
+            
+            // Check for step
+            if (*ptr == ':') {
+                ptr++; // skip second colon
+                if (*ptr != ',' && *ptr != ']' && *ptr != '\0') {
+                    char* endptr;
+                    step = strtol(ptr, &endptr, 10);
+                    if (endptr != ptr) {
+                        ptr = endptr;
+                    }
+                }
+            }
+            
+            NIndexRuleSet_AddSliceAdvanced(&rs, start, stop, step, has_start, has_stop);
+        }
+        // Handle integer or slice starting with integer
+        else if ((*ptr >= '0' && *ptr <= '9') || *ptr == '-') {
+            char* endptr;
+            nr_intp first_num = strtol(ptr, &endptr, 10);
+            ptr = endptr;
+            
+            // Skip whitespace
+            while (*ptr == ' ' || *ptr == '\t') ptr++;
+            
+            // If followed by colon, it's a slice
+            if (*ptr == ':') {
+                nr_intp start = first_num, stop = 0, step = 1;
+                nr_bool has_start = 1, has_stop = 0;
+                
+                ptr++; // skip colon
+                
+                // Parse stop value
+                if (*ptr != ':' && *ptr != ',' && *ptr != ']' && *ptr != '\0') {
+                    while (*ptr == ' ' || *ptr == '\t') ptr++;
+                    if ((*ptr >= '0' && *ptr <= '9') || *ptr == '-') {
+                        stop = strtol(ptr, &endptr, 10);
+                        if (endptr != ptr) {
+                            has_stop = 1;
+                            ptr = endptr;
+                        }
+                    }
+                }
+                
+                // Parse step value
+                if (*ptr == ':') {
+                    ptr++; // skip second colon
+                    while (*ptr == ' ' || *ptr == '\t') ptr++;
+                    if ((*ptr >= '0' && *ptr <= '9') || *ptr == '-') {
+                        step = strtol(ptr, &endptr, 10);
+                        if (endptr != ptr) {
+                            ptr = endptr;
+                        }
+                    }
+                }
+                
+                NIndexRuleSet_AddSliceAdvanced(&rs, start, stop, step, has_start, has_stop);
+            }
+            // Otherwise it's an integer index
+            else {
+                NIndexRuleSet_AddInt(&rs, first_num);
+            }
+        }
+        // Skip unknown characters
+        else {
+            ptr++;
+        }
+        
+        // Skip whitespace
+        while (*ptr == ' ' || *ptr == '\t') ptr++;
+    }
+    
+    return rs;
+}
+
 
 NR_STATIC_INLINE void
 free_nodes_in_info(node_indices_info* info) {
