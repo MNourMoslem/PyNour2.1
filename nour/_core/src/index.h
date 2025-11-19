@@ -53,6 +53,9 @@ typedef struct {
 NR_PUBLIC NIndexRuleSet
 NIndexRuleSet_New();
 
+NR_PUBLIC void
+NIndexRuleSet_Init(NIndexRuleSet* rs);
+
 NR_PUBLIC int
 NIndexRuleSet_AddInt(NIndexRuleSet* rs, nr_intp index);
 

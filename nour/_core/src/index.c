@@ -49,8 +49,14 @@ typedef struct
 NR_PUBLIC NIndexRuleSet
 NIndexRuleSet_New() {
     NIndexRuleSet rs;
-    NIndexRuleSet_NUM_RULES(&rs) = 0;
+    NIndexRuleSet_Init(&rs);
     return rs;
+}
+
+NR_PUBLIC void
+NIndexRuleSet_Init(NIndexRuleSet* rs) {
+    if (!rs) return;
+    NIndexRuleSet_NUM_RULES(rs) = 0;
 }
 
 NR_PUBLIC int
