@@ -22,7 +22,10 @@ NR_PUBLIC int
 NWindowIter_New(const Node* node, NWindowIter* wit, const nr_intp* window_dims,
                 const nr_intp* strides_factor, const nr_intp* dilation);
 
-#define Node_LOOP_MODED_NAMED(node, iter_name, iter_mode, code)         \
+NR_PUBLIC void
+NCoordIter_New(NCoordIter* citer, int ndim, const nr_intp* shape);
+
+#define Node_LOOP_MODE_NAMED(node, iter_name, iter_mode, code)         \
 do{                                                    \
                                                        \
     NIter iter_name;                                   \
@@ -36,14 +39,14 @@ do{                                                    \
 } while (0);
 
 
-#define Node_LOOP_MODED(node, iter_mode, code) \
-    Node_LOOP_MODED_NAMED(node, __iter, iter_mode, code)
+#define Node_LOOP_MODE(node, iter_mode, code) \
+    Node_LOOP_MODE_NAMED(node, __iter, iter_mode, code)
 
 #define Node_LOOP_NAMED(node, iter_name, code) \
-    Node_LOOP_MODED_NAMED(node, iter_name, NITER_MODE_NONE, code)
+    Node_LOOP_MODE_NAMED(node, iter_name, NITER_MODE_NONE, code)
 
 #define Node_LOOP(node, code) \
-    Node_LOOP_MODED(node, NITER_MODE_NONE, code)
+    Node_LOOP_MODE(node, NITER_MODE_NONE, code)
 
 
 #endif

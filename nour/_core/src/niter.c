@@ -27,7 +27,7 @@ NIter_New(NIter* niter ,void* data, int ndim, const nr_intp* shape,
     niter->end = NR_NItems(ndim, shape);
     niter->idx = niter->end;
     niter->step = niter->strides[niter->nd_m1];
-    niter->iter_mode = iter_mode;
+    niter->iter_mode = iter_mode == NITER_MODE_NONE ? NITER_MODE_STRIDED : iter_mode;
 }
 
 NR_PUBLIC int
@@ -49,6 +49,35 @@ NMultiIter_FromNodes(Node** nodes, int n_nodes, NMultiIter* mit){
 
 NR_PUBLIC int
 NMultiIter_New(void** data_ptr, int num, int* ndims, nr_intp** shapes, nr_intp** strides, NMultiIter* mit){
+    if (num > NR_MULTIITER_MAX_NITER){
+        NError_RaiseError(
+            NError_ValueError,
+            "Number of iterators exceeds maximum allowed (%d > %d)",
+            num, NR_MULTIITER_MAX_NITER
+        );
+        return -1;
+    }
+
+    if (num <= 0){
+        NError_RaiseError(
+            NError_ValueError,
+            "Number of iterators must be positive and bigger than 0. Got %d",
+            num
+        );
+        return -1;
+    }
+
+    if (num == 1){ // create one single iterator
+        NIter_New(mit->iters, data_ptr[0], ndims[0], shapes[0], strides[0], NITER_MODE_NONE);
+        
+        mit->out_ndim = ndims[0];
+        memcpy(mit->out_shape, shapes[0], sizeof(nr_intp) * ndims[0]);
+        mit->n_iter = 1;
+        mit->end = (int)NR_NItems(mit->out_ndim, mit->out_shape);
+        return 0;
+    }
+
+
     // Use the new broadcast shapes function for arrays
     if (NTools_BroadcastShapesFromArrays(shapes, ndims, num, mit->out_shape, &mit->out_ndim) != 0) {
         return -1;
@@ -59,7 +88,6 @@ NMultiIter_New(void** data_ptr, int num, int* ndims, nr_intp** shapes, nr_intp**
     
     for (int i = 0; i < num; i++){
         tmp = NTools_BroadcastStrides(shapes[i], ndims[i], strides[i], mit->out_shape, mit->out_ndim, tmp_str);
-    
         if (tmp != 0){
             return -1;
         }
@@ -166,4 +194,18 @@ NWindowIter_New(const Node* node, NWindowIter* wit, const nr_intp* window_dims,
     }
 
     return 0;
+}
+
+NR_PUBLIC void
+NCoordIter_New(NCoordIter* citer, int ndim, const nr_intp* shape) {
+    citer->ndim = ndim;
+    memcpy(citer->shape, shape, sizeof(nr_intp) * ndim);
+    
+    // Calculate total number of coordinates
+    citer->end = 1;
+    for (int i = 0; i < ndim; i++) {
+        citer->end *= shape[i];
+    }
+    
+    citer->idx = citer->end;  // Set to end so ITER macro will reset
 }
