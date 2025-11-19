@@ -155,10 +155,10 @@ NR_PUBLIC int NMath_##OPC##_##I_NT(NFuncArgs* args) {                           
 #define NMATH_METHODS_ALL(OP_NAME) \
     NMATH_METHODS_INT(OP_NAME), \
     NMATH_METHODS_FLOAT(OP_NAME)
-
+    
 // Full template for method array declaration
 #define NMATH_METHOD_ARRAY(OP_NAME, METHODS) \
-    NR_STATIC NFunc __NMATH_##OP_NAME##_METHODS__[] = { \
+    NR_STATIC NFuncFunc __NMATH_##OP_NAME##_METHODS__[] = { \
         METHODS \
     };
 

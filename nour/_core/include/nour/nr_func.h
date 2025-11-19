@@ -9,7 +9,7 @@
     Key Components:
     --------------
     1. Function argument structure (NFuncArgs)
-    2. Function pointer type definition (NFunc)
+    2. Function pointer type definition (NFuncFunc)
 */
 
 #ifndef NOUR__CORE_INCLUDE__NOUR_NR_FUNC_H
@@ -30,7 +30,7 @@ typedef struct
 }NFuncArgs;
 
 /* Function pointer type for PyNour operations */
-typedef int (*NFunc) (NFuncArgs*);
+typedef int (*NFuncFunc) (NFuncArgs*);
 
 typedef int (*GradFunc) (Node* out_node);
 

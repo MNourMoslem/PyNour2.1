@@ -140,7 +140,7 @@ _CleanupCopiedNodes(Node* a, Node* b, int copy_a, int copy_b) {
 
 /* Unified function for both 1-input and 2-input operations */
 NR_PRIVATE Node*
-_NMath_Func_Core(Node* c, Node* a, Node* b, NFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
+_NMath_Func_Core(Node* c, Node* a, Node* b, NFuncFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
     /* Validate input types */
     if (!_ValidateInputTypes(a, b, intype, in_castable, func_name)) {
         return NULL;
@@ -171,7 +171,7 @@ _NMath_Func_Core(Node* c, Node* a, Node* b, NFunc func_list[], int outtype, int 
         (int)iot.intype - (int)NR_UINT64 - 1;
     
     /* Execute function */
-    NFunc func = func_list[func_idx];
+    NFuncFunc func = func_list[func_idx];
     Node* in[2] = {a, b};
     NFuncArgs args;
     args.nodes = in;
@@ -191,11 +191,11 @@ _NMath_Func_Core(Node* c, Node* a, Node* b, NFunc func_list[], int outtype, int 
 
 /* Wrapper functions for backward compatibility */
 NR_PRIVATE Node*
-_NMath_Func_2in1out(Node* c, Node* a, Node* b, NFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
+_NMath_Func_2in1out(Node* c, Node* a, Node* b, NFuncFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
     return _NMath_Func_Core(c, a, b, func_list, outtype, intype, in_castable, func_name);
 }
 
 NR_PRIVATE Node*
-_NMath_Func_1in1out(Node* c, Node* a, NFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
+_NMath_Func_1in1out(Node* c, Node* a, NFuncFunc func_list[], int outtype, int intype, int in_castable, char* func_name) {
     return _NMath_Func_Core(c, a, NULL, func_list, outtype, intype, in_castable, func_name);
 }
