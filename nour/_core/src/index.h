@@ -83,7 +83,7 @@ NR_PUBLIC int
 NIndexRuleSet_AddRange(NIndexRuleSet* rs, nr_intp start, nr_intp stop);
 
 NR_PUBLIC Node*
-Node_RealIndex(Node* base_node, NIndexRuleSet* rs);
+Node_Index(Node* base_node, NIndexRuleSet* rs);
 
 NR_PUBLIC Node*
 Node_RiskyIndex(Node* base_node, NIndexRuleSet* rs);

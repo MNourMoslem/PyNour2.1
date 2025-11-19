@@ -840,7 +840,7 @@ node_index(Node* base_node, NIndexRuleSet* rs, int risky_indexing){
 }
 
 NR_PUBLIC Node*
-Node_RealIndex(Node* base_node, NIndexRuleSet* rs){
+Node_Index(Node* base_node, NIndexRuleSet* rs){
     return node_index(base_node, rs, 0);
 }
 
