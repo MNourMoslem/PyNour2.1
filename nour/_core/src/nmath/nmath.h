@@ -6,7 +6,6 @@
 #include "../node_core.h"
 #include "../operations.h"
 #include "loops.h"
-#include "_nmath_func_core.h"
 #include "math_basic_templates.h"
 
 
