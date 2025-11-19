@@ -1,15 +1,46 @@
 #include "main.h"
+#include <stdio.h>
 
-int main(){
-   test_allocation_test();
-   test_shape_test();
-   test_index_test();
-   test_refcount_test();
-   test_boolean_mask_test();
-   test_tc_test();
-   test_nmath_test();
-   test_node2string_test();
-   test_narray_test();
+#define print_separator \
+    printf("===============================\n");
 
-   return 0;
+#define print_empty_line \
+    printf("\n");
+
+void
+print_title(const char* title) {
+    print_separator;
+    printf("=== %s ===\n", title);
+    print_separator;
+}
+
+void print_result(int num, int result) {
+    printf("Test %d: %s\n", num, result ? "PASSED" : "FAILED");
+}
+
+void run_all_tests(TestFunc* tests, const char* test_title, int num_tests) {
+    print_empty_line;
+    print_title(test_title);
+
+    int passed = 0;
+    for (int i = 0; i < num_tests; i++) {
+        NError_Clear();
+        int result = tests[i]();
+        print_result(i + 1, result);
+        if (!result){
+            NError_Print();
+        } else {
+            passed++;
+        }
+    }
+    print_separator;
+ 
+    printf("\n%s Tests Passed: %d/%d\n", test_title, passed, num_tests);
+}
+
+int main() {
+    test_basic();
+    test_index();
+    // Add calls to other test suites here as needed
+    return 0;
 }
