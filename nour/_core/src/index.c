@@ -85,7 +85,6 @@ NIndexRuleSet_AddSlice(NIndexRuleSet* rs, nr_intp start, nr_intp stop, nr_intp s
 
 NR_PUBLIC int
 NIndexRuleSet_AddNewAxis(NIndexRuleSet* rs) {
-    NINDEXRULESET_MAX_NUM_ERR(rs);
     NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
     rule->type = NIndexRuleType_NewAxis;
     return 0;
@@ -93,7 +92,6 @@ NIndexRuleSet_AddNewAxis(NIndexRuleSet* rs) {
 
 NR_PUBLIC int
 NIndexRuleSet_AddEllipsis(NIndexRuleSet* rs) {
-    NINDEXRULESET_MAX_NUM_ERR(rs);
     NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
     rule->type = NIndexRuleType_Ellipsis;
     return 0;
@@ -101,7 +99,6 @@ NIndexRuleSet_AddEllipsis(NIndexRuleSet* rs) {
 
 NR_PUBLIC int
 NIndexRuleSet_AddNode(NIndexRuleSet* rs, Node* index_node) {
-    NINDEXRULESET_MAX_NUM_ERR(rs);
     NIndexRule* rule = &NIndexRuleSet_RULES(rs)[NIndexRuleSet_NUM_RULES(rs)++];
     rule->type = NIndexRuleType_Node;
     rule->data.node_data.node = index_node;
