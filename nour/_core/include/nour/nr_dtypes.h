@@ -17,6 +17,8 @@
     Each type corresponds to a specific numeric format.
 */
 typedef enum{
+    NR_NONE = -1,  // Invalid or unspecified type
+
     NR_BOOL = 0,     // Boolean type
     NR_INT8,         // 8-bit signed integer
     NR_UINT8,        // 8-bit unsigned integer
@@ -285,5 +287,6 @@ NDtype_AsStringOnlyType(NR_DTYPE dtype, char dst[]){
 #define Node_IsInt(node) (NDtype_GetDtypeType(NODE_DTYPE(node)) == NDTYPE_INT)
 #define Node_IsFloat(node) (NDtype_GetDtypeType(NODE_DTYPE(node)) == NDTYPE_FLOAT)
 
+#define NDtype_IsValid(dtype) ((dtype) >= NR_BOOL && (dtype) < NR_NUM_NUMIRC_DT)
 
 #endif // NR__CORE__INCLUDE__NR_DTYPES_H
