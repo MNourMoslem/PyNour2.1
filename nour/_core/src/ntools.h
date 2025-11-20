@@ -24,4 +24,8 @@ NTools_BroadcastShapes(Node** nodes, int n_nodes, nr_intp* out_shape, int* out_n
 NR_PUBLIC int
 NTools_BroadcastShapesFromArrays(nr_intp** shapes, int* ndims, int n_shapes, nr_intp* out_shape, int* out_ndim);
 
+NR_PUBLIC int
+NTools_IsBroadcastable(nr_intp* a_shape, int a_ndim,
+                       nr_intp* b_shape, int b_ndim);
+
 #endif

@@ -154,3 +154,20 @@ NTools_BroadcastShapesFromArrays(nr_intp** shapes, int* ndims, int n_shapes, nr_
 
     return 0;
 }
+
+NR_PUBLIC int
+NTools_IsBroadcastable(nr_intp* a_shape, int a_ndim,
+                       nr_intp* b_shape, int b_ndim) {
+    int max_ndim = (a_ndim > b_ndim) ? a_ndim : b_ndim;
+
+    for (int i = 0; i < max_ndim; i++) {
+        nr_intp a_dim = (i < (max_ndim - a_ndim)) ? 1 : a_shape[i - (max_ndim - a_ndim)];
+        nr_intp b_dim = (i < (max_ndim - b_ndim)) ? 1 : b_shape[i - (max_ndim - b_ndim)];
+
+        if (a_dim != b_dim && a_dim != 1 && b_dim != 1) {
+            return 0; // Not broadcastable
+        }
+    }
+
+    return 1; // Broadcastable
+}
