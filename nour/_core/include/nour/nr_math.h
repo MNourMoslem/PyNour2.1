@@ -47,9 +47,11 @@
 #define nr_sinh sinh
 #define nr_cosh cosh
 #define nr_tanh tanh
+#define nr_coth(x) (1.0 / tanh(x))
 #define nr_asin asin
 #define nr_acos acos
 #define nr_atan atan
+#define nr_acot(x) (1.0 / atan(x))
 #define nr_log log
 #define nr_log10 log10
 #define nr_cbrt cbrt
@@ -84,9 +86,11 @@
 #define nr_sinhf sinhf
 #define nr_coshf coshf
 #define nr_tanhf tanhf
+#define nr_cothf(x) (1.0f / tanhf(x))
 #define nr_asinf asinf
 #define nr_acosf acosf
 #define nr_atanf atanf
+#define nr_acotf(x) (1.0f / atanf(x))
 #define nr_logf logf
 #define nr_log10f log10f
 #define nr_cbrtf cbrtf
@@ -134,5 +138,8 @@
 #define NMATH_BIT_NOT(a) (~a)
 #define NMATH_BIT_LSH(a, b) (a << b)
 #define NMATH_BIT_RSH(a, b) (a >> b)
+
+/* Negation */
+#define NMATH_NEG(a) (-a)
 
 #endif // NR__CORE__INCLUDE__NR_MATH_H
