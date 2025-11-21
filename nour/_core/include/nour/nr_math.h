@@ -64,6 +64,7 @@
 #define nr_acosh acosh
 #define nr_asinh asinh
 #define nr_atanh atanh
+#define nr_acoth(x) (1.0 / atanh(x))
 #define nr_rint rint
 #define nr_trunc trunc
 #define nr_exp2 exp2
@@ -103,11 +104,13 @@
 #define nr_asinhf asinhf
 #define nr_acoshf acoshf
 #define nr_atanhf atanhf
+#define nr_acothf(x) (1.0f / atanhf(x))
 #define nr_rintf rintf
 #define nr_truncf truncf
 #define nr_exp2f exp2f
 #define nr_frexpf frexpf
 #define nr_ldexpf ldexpf
+#define nr_modff modff
 #define nr_copysignf copysignf
 #define nr_nextafterf nextafterf
 
@@ -139,7 +142,8 @@
 #define NMATH_BIT_LSH(a, b) (a << b)
 #define NMATH_BIT_RSH(a, b) (a >> b)
 
-/* Negation */
+
 #define NMATH_NEG(a) (-a)
+#define NMATH_ABS(a) ((a) < 0 ? -(a) : (a))
 
 #endif // NR__CORE__INCLUDE__NR_MATH_H
