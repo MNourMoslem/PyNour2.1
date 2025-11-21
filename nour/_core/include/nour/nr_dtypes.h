@@ -288,5 +288,8 @@ NDtype_AsStringOnlyType(NR_DTYPE dtype, char dst[]){
 #define Node_IsFloat(node) (NDtype_GetDtypeType(NODE_DTYPE(node)) == NDTYPE_FLOAT)
 
 #define NDtype_IsValid(dtype) ((dtype) >= NR_BOOL && (dtype) < NR_NUM_NUMIRC_DT)
+#define NDtype_IsInteger(dtype) (NDtype_GetDtypeType(dtype) == NDTYPE_INT)
+#define NDtype_IsFloat(dtype) (NDtype_GetDtypeType(dtype) == NDTYPE_FLOAT)
+#define NDtype_IsBool(dtype) (NDtype_GetDtypeType(dtype) == NDTYPE_BOOL)
 
 #endif // NR__CORE__INCLUDE__NR_DTYPES_H
