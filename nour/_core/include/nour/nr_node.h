@@ -4,7 +4,7 @@
 #include "nr_types.h"
 #include "nr_dtypes.h"
 /* Forward declare dependent types to avoid circular includes */
-struct NodeOperation;
+struct NFuncFuncInfo;
 #include <string.h>
 
 /* Array memory layout types */
@@ -50,7 +50,7 @@ typedef struct Node
     const char* name;        
     
     /* Optional attached operation (computation graph). Forward-declared to avoid circular include. */
-    struct NodeOperation* op;
+    struct NFuncFuncInfo* nfunc_info;
     struct Node* grad;  // Gradient node reference
 } Node;
 
@@ -117,5 +117,9 @@ Node_SameShape(const Node* a, const Node* b){
 
 /* Function type for node-to-node operations */
 typedef Node* (*Node2NodeFunc) (Node* , const Node*);
+
+#define NODE_INCREF(node)    (NODE_REFCOUNT(node)++)
+// Node_Free works as NODE_DECREF. soon it will be renamed and be a private function. 
+#define NODE_DECREF(node)    Node_Free(node)
 
 #endif // NR__CORE__INCLUDE__NR_NODE_H
