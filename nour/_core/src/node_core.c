@@ -37,7 +37,7 @@ Node_NewAdvanced(void* data, int own_data, int ndim, nr_intp* shape,
     node->ref_count = 1;
     node->base = NULL;
     node->name = name ? name : NR_NODE_NAME;
-    node->op = NULL;
+    node->nfunc_info = NULL;
     node->grad = NULL;
 
     nr_int s = sizeof(nr_intp) * ndim;
