@@ -1,369 +1,312 @@
+/*
+ * Shape transformation operations.
+ * Each function returns a new Node view (sharing memory) unless:
+ *   - Operation requires data size change (resize) => allocates new memory.
+ *   - 'copy' argument is set to non-zero AND the original node has ref_count == 1;
+ *     in that case we modify the original node in-place and return it.
+ * All functions validate axes and dimensionality. On error they return NULL
+ * after raising an appropriate NError.
+ */
+
 #include "shape.h"
 #include "node_core.h"
 #include "ntools.h"
 #include "nerror.h"
+#include "niter.h"
 
-/**
- * Reshapes a node to new dimensions while preserving the total number of elements.
- * 
- * Parameters:
- *   node: The node to reshape
- *   new_shp: Array containing the new shape dimensions
- *   new_ndim: Number of dimensions in the new shape
- * 
- * The function will:
- *   - Validate the new dimensions
- *   - Check that total elements remain the same
- *   - Update shape and strides arrays
- *   - Handle memory reallocation if needed
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_Reshape(Node* node, nr_long* new_shp, int new_ndim) {
-    if (new_ndim > NR_NODE_MAX_NDIM) {
-        NError_RaiseError(
-            NError_ValueError,
-            "maximum number of dimensions is %d, got %d for %s",
-            NR_NODE_MAX_NDIM, new_ndim, node->name
-        );
-        return -1;
-    }
+/* -------------------------------------------------------------------------- */
+/* Helper utilities                                                           */
+/* -------------------------------------------------------------------------- */
 
-    if (NODE_IS_SCALAR(node)) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot reshape a scalar %s",
-            node->name
-        );
-        return -1;
-    }
-
-    nr_long old_nitems = Node_NItems(node);
-    nr_long new_nitems = NR_NItems(new_ndim, new_shp);
-    
-    if (new_nitems != old_nitems) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot reshape %s of size %llu into shape of size %llu",
-            node->name, old_nitems, new_nitems
-        );
-        return -1;
-    }
-
-    if (node->ndim <= new_ndim) {
-        memcpy(node->shape, new_shp, new_ndim * sizeof(nr_long));
-        NTools_CalculateStrides(new_ndim, new_shp, node->dtype.size, node->strides);
-    } else {
-        nr_long* new_shp_block = malloc(sizeof(nr_long) * new_ndim);
-        if (!new_shp_block) {
-            NError_RaiseMemoryError();
-            return -1;
-        }
-        memcpy(new_shp_block, new_shp, new_ndim * sizeof(nr_long));
-
-        nr_long* new_strides = malloc(sizeof(nr_long) * new_ndim);
-        if (!new_strides) {
-            free(new_shp_block);
-            NError_RaiseMemoryError();
-            return -1;
-        }
-        NTools_CalculateStrides(new_ndim, new_shp, node->dtype.size, new_strides);
-        
-        free(node->shape);
-        free(node->strides);
-        node->shape = new_shp_block;
-        node->strides = new_strides;
-    }
-
-    node->ndim = new_ndim;
-    return 0;
+NR_STATIC_INLINE int _can_inplace(Node* node, int copy){
+    return copy && node && NODE_REFCOUNT(node) == 1;
 }
 
-/**
- * Removes all dimensions of size 1 from the node's shape.
- * For example: shape (2, 1, 3, 1, 4) becomes (2, 3, 4)
- * 
- * Parameters:
- *   node: The node to squeeze
- * 
- * The function will:
- *   - Remove all dimensions of size 1
- *   - Convert to scalar if all dimensions are 1
- *   - Reallocate memory for shape and strides if needed
- *   - Recalculate strides for the new shape
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_Squeeze(Node* node) {
-    if (NODE_IS_SCALAR(node)) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot squeeze a scalar %s",
-            node->name
-        );
-        return -1;
+NR_STATIC_INLINE void _apply_inplace(Node* node, int new_ndim, nr_intp* new_shape){
+    /* Reallocate shape/strides if ndim changed */
+    if (new_ndim != node->ndim){
+        free(node->shape);
+        free(node->strides);
+        node->shape = (nr_intp*)malloc(sizeof(nr_intp) * new_ndim);
+        node->strides = (nr_intp*)malloc(sizeof(nr_intp) * new_ndim);
+        if (!node->shape || !node->strides){
+            NError_RaiseMemoryError();
+            return; /* caller must detect allocation failure separately if needed */
+        }
     }
+    memcpy(node->shape, new_shape, sizeof(nr_intp) * new_ndim);
+    NTools_CalculateStrides(new_ndim, new_shape, NODE_ITEMSIZE(node), node->strides);
+    node->ndim = new_ndim;
+}
 
-    // Count new dimensions and create temporary arrays
+NR_STATIC_INLINE Node* _new_view(Node* src, int ndim, nr_intp* shape, nr_intp* strides){
+    return Node_NewChild(src, ndim, shape, strides, 0);
+}
+
+NR_STATIC_INLINE int _validate_axis(int axis, int ndim){
+    return axis >= 0 && axis < ndim;
+}
+
+/* Build contiguous strides for a given shape */
+NR_STATIC_INLINE void _build_strides(int ndim, const nr_intp* shape, nr_intp itemsize, nr_intp* strides){
+    NTools_CalculateStrides(ndim, (nr_intp*)shape, itemsize, strides);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reshape (view)                                                             */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_Reshape(Node* node, nr_intp* new_shape, int new_ndim, int copy){
+    if (!node){
+        NError_RaiseError(NError_ValueError, "reshape: NULL node");
+        return NULL;
+    }
+    if (new_ndim < 0 || new_ndim > NR_NODE_MAX_NDIM){
+        NError_RaiseError(NError_ValueError, "reshape: invalid new ndim %d", new_ndim);
+        return NULL;
+    }
+    nr_intp old_items = Node_NItems(node);
+    nr_intp new_items = NR_NItems(new_ndim, new_shape);
+    if (old_items != new_items){
+        NError_RaiseError(NError_ValueError, "reshape: item count mismatch %lld -> %lld", (long long)old_items, (long long)new_items);
+        return NULL;
+    }
+    if (!NODE_IS_CONTIGUOUS(node)){
+        NError_RaiseError(NError_ValueError, "reshape: only contiguous arrays supported for view reshape");
+        return NULL;
+    }
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, new_ndim, new_shape);
+        return node;
+    }
+    nr_intp strides[NR_NODE_MAX_NDIM];
+    _build_strides(new_ndim, new_shape, NODE_ITEMSIZE(node), strides);
+    return _new_view(node, new_ndim, new_shape, strides);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ravel / Flatten (1-D view)                                                 */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_Ravel(Node* node, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "ravel: NULL node"); return NULL; }
+    nr_intp nitems = Node_NItems(node);
+    nr_intp shape1[1] = { nitems };
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, 1, shape1);
+        return node;
+    }
+    if (!NODE_IS_CONTIGUOUS(node)){
+        /* Fallback: create a contiguous copy */
+        Node* out = Node_NewEmpty(1, shape1, NODE_DTYPE(node));
+        if (!out) return NULL;
+        Node_Copy(out, node);
+        return out;
+    }
+    nr_intp strides[1]; _build_strides(1, shape1, NODE_ITEMSIZE(node), strides);
+    return _new_view(node, 1, shape1, strides);
+}
+
+NR_PUBLIC Node* Node_Flatten(Node* node, int copy){
+    return Node_Ravel(node, copy);
+}
+
+/* -------------------------------------------------------------------------- */
+/* SwapAxes                                                                  */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_SwapAxes(Node* node, int axis1, int axis2, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "swapaxes: NULL node"); return NULL; }
+    if (!_validate_axis(axis1, node->ndim) || !_validate_axis(axis2, node->ndim)){
+        NError_RaiseError(NError_ValueError, "swapaxes: invalid axes %d, %d", axis1, axis2);
+        return NULL;
+    }
+    if (axis1 == axis2){
+        return copy ? node : _new_view(node, node->ndim, node->shape, node->strides);
+    }
+    nr_intp new_shape[NR_NODE_MAX_NDIM];
+    nr_intp new_strides[NR_NODE_MAX_NDIM];
+    memcpy(new_shape, node->shape, sizeof(nr_intp)*node->ndim);
+    memcpy(new_strides, node->strides, sizeof(nr_intp)*node->ndim);
+    nr_intp tmp = new_shape[axis1]; new_shape[axis1] = new_shape[axis2]; new_shape[axis2] = tmp;
+    tmp = new_strides[axis1]; new_strides[axis1] = new_strides[axis2]; new_strides[axis2] = tmp;
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, node->ndim, new_shape);
+        memcpy(node->strides, new_strides, sizeof(nr_intp)*node->ndim);
+        return node;
+    }
+    return Node_NewChild(node, node->ndim, new_shape, new_strides, 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Transpose (reverse axes)                                                   */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_Transpose(Node* node, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "transpose: NULL node"); return NULL; }
+    if (node->ndim <= 1){ return copy ? node : _new_view(node, node->ndim, node->shape, node->strides); }
+    nr_intp new_shape[NR_NODE_MAX_NDIM];
+    nr_intp new_strides[NR_NODE_MAX_NDIM];
+    for (int i=0;i<node->ndim;i++){ new_shape[i] = node->shape[node->ndim-1-i]; new_strides[i] = node->strides[node->ndim-1-i]; }
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, node->ndim, new_shape);
+        memcpy(node->strides, new_strides, sizeof(nr_intp)*node->ndim);
+        return node;
+    }
+    return Node_NewChild(node, node->ndim, new_shape, new_strides, 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Permute Dims (arbitrary order)                                             */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_PermuteDims(Node* node, const int* order, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "permute_dims: NULL node"); return NULL; }
+    if (!order){ NError_RaiseError(NError_ValueError, "permute_dims: NULL order"); return NULL; }
+    int ndim = node->ndim;
+    int seen[NR_NODE_MAX_NDIM] = {0};
+    for (int i=0;i<ndim;i++){ if (order[i] < 0 || order[i] >= ndim || seen[order[i]]){ NError_RaiseError(NError_ValueError, "permute_dims: invalid or duplicate axis %d", order[i]); return NULL; } seen[order[i]] = 1; }
+    nr_intp new_shape[NR_NODE_MAX_NDIM]; nr_intp new_strides[NR_NODE_MAX_NDIM];
+    for (int i=0;i<ndim;i++){ new_shape[i] = node->shape[order[i]]; new_strides[i] = node->strides[order[i]]; }
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, ndim, new_shape);
+        memcpy(node->strides, new_strides, sizeof(nr_intp)*ndim);
+        return node;
+    }
+    return Node_NewChild(node, ndim, new_shape, new_strides, 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* MoveAxis (move single axis to new position)                                */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_MoveAxis(Node* node, int src_axis, int dst_axis, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "moveaxis: NULL node"); return NULL; }
+    int ndim = node->ndim;
+    if (!_validate_axis(src_axis, ndim) || dst_axis < 0 || dst_axis >= ndim){
+        NError_RaiseError(NError_ValueError, "moveaxis: invalid src %d or dst %d", src_axis, dst_axis);
+        return NULL;
+    }
+    if (src_axis == dst_axis){ return copy ? node : _new_view(node, ndim, node->shape, node->strides); }
+    int order[NR_NODE_MAX_NDIM];
+    int j=0;
+    for (int i=0;i<ndim;i++){ if (i != src_axis){ order[j++] = i; } }
+    for (int i=ndim-1;i>=dst_axis;i--){ order[i] = order[i-1]; }
+    order[dst_axis] = src_axis; /* This algorithm ensures insertion at dst_axis */
+    /* But adjust: simpler approach build new order manually */
+    j=0; int k=0; int tmp_order[NR_NODE_MAX_NDIM];
+    for (int i=0;i<ndim;i++){ tmp_order[i] = -1; }
+    for (int i=0;i<ndim;i++){ if (i==src_axis) continue; tmp_order[j++] = i; }
+    /* insert src_axis at dst_axis */
+    for (int i=ndim-1;i>dst_axis;i--){ tmp_order[i] = tmp_order[i-1]; }
+    tmp_order[dst_axis] = src_axis;
+    for (int i=0;i<ndim;i++){ order[i] = tmp_order[i]; }
+    return Node_PermuteDims(node, order, copy);
+}
+
+/* -------------------------------------------------------------------------- */
+/* RollAxis (move axis toward front until position 'start')                   */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_RollAxis(Node* node, int axis, int start, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "rollaxis: NULL node"); return NULL; }
+    int ndim = node->ndim;
+    if (!_validate_axis(axis, ndim) || start < 0 || start >= ndim){
+        NError_RaiseError(NError_ValueError, "rollaxis: invalid axis %d or start %d", axis, start);
+        return NULL;
+    }
+    if (axis < start){ /* move axis forward (toward end) until start */
+        return Node_MoveAxis(node, axis, start, copy);
+    }
+    /* axis > start: move backwards */
+    int order[NR_NODE_MAX_NDIM];
+    int idx=0;
+    for (int i=0;i<ndim;i++){ order[i] = i; }
+    while (axis > start){
+        int a = order[axis-1];
+        order[axis-1] = order[axis];
+        order[axis] = a;
+        axis--;
+    }
+    return Node_PermuteDims(node, order, copy);
+}
+
+/* -------------------------------------------------------------------------- */
+/* MatrixTranspose (2-D only)                                                 */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_MatrixTranspose(Node* node, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "matrix_transpose: NULL node"); return NULL; }
+    if (node->ndim != 2){ NError_RaiseError(NError_ValueError, "matrix_transpose: requires 2D, got %d", node->ndim); return NULL; }
+    int order[2] = {1,0};
+    return Node_PermuteDims(node, order, copy);
+}
+
+/* -------------------------------------------------------------------------- */
+/* ExpandDims (insert axis of length 1)                                       */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_ExpandDims(Node* node, int axis, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "expand_dims: NULL node"); return NULL; }
+    int ndim = node->ndim;
+    if (axis < 0 || axis > ndim){ NError_RaiseError(NError_ValueError, "expand_dims: invalid axis %d", axis); return NULL; }
+    nr_intp new_shape[NR_NODE_MAX_NDIM];
+    nr_intp new_strides[NR_NODE_MAX_NDIM];
+    for (int i=0;i<axis;i++){ new_shape[i] = node->shape[i]; new_strides[i] = node->strides[i]; }
+    new_shape[axis] = 1; new_strides[axis] = (ndim==0 ? NODE_ITEMSIZE(node) : node->strides[axis==ndim?axis-1:axis]);
+    for (int i=axis;i<ndim;i++){ new_shape[i+1] = node->shape[i]; new_strides[i+1] = node->strides[i]; }
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, ndim+1, new_shape);
+        memcpy(node->strides, new_strides, sizeof(nr_intp)*(ndim+1));
+        return node;
+    }
+    return Node_NewChild(node, ndim+1, new_shape, new_strides, 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Squeeze (remove axes of length 1)                                          */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_Squeeze(Node* node, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "squeeze: NULL node"); return NULL; }
+    if (NODE_IS_SCALAR(node)){ return copy ? node : _new_view(node, 0, NULL, NULL); }
+    nr_intp new_shape[NR_NODE_MAX_NDIM]; nr_intp new_strides[NR_NODE_MAX_NDIM];
     int new_ndim = 0;
-    nr_long new_shape[NR_NODE_MAX_NDIM];
-    
-    for (int i = 0; i < node->ndim; i++) {
-        if (node->shape[i] != 1) {
-            new_shape[new_ndim++] = node->shape[i];
-        }
+    for (int i=0;i<node->ndim;i++){ if (node->shape[i] != 1){ new_shape[new_ndim] = node->shape[i]; new_strides[new_ndim] = node->strides[i]; new_ndim++; } }
+    if (new_ndim == node->ndim){ return copy ? node : _new_view(node, node->ndim, node->shape, node->strides); }
+    if (new_ndim == 0){ /* becomes scalar */
+        if (_can_inplace(node, copy)){
+            free(node->shape); free(node->strides); node->shape=NULL; node->strides=NULL; node->ndim=0; return node; }
+        return Node_NewChild(node, 0, NULL, NULL, 0);
     }
-
-    // If all dimensions were 1, result should be a scalar
-    if (new_ndim == 0) {
-        free(node->shape);
-        free(node->strides);
-        node->shape = NULL;
-        node->strides = NULL;
-        node->ndim = 0;
-        return 0;
+    if (_can_inplace(node, copy)){
+        _apply_inplace(node, new_ndim, new_shape);
+        memcpy(node->strides, new_strides, sizeof(nr_intp)*new_ndim);
+        return node;
     }
-
-    // Allocate new arrays if needed
-    if (new_ndim != node->ndim) {
-        memcpy(node->shape, new_shape, new_ndim * sizeof(nr_long));
-        NTools_CalculateStrides(new_ndim, node->shape, node->dtype.size, node->strides);
-    }
-
-    node->ndim = new_ndim;
-    return 0;
+    return Node_NewChild(node, new_ndim, new_shape, new_strides, 0);
 }
 
-/**
- * Reverses the order of dimensions in the node.
- * For example: shape (2, 3, 4) becomes (4, 3, 2)
- * 
- * Parameters:
- *   node: The node to transpose
- * 
- * The function will:
- *   - Reverse the order of dimensions
- *   - Update both shape and strides arrays
- *   - Handle 0-D and 1-D cases appropriately
- *   - No memory reallocation needed
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_Transpose(Node* node) {
-    if (NODE_IS_SCALAR(node)) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot transpose a scalar %s",
-            node->name
-        );
-        return -1;
+/* -------------------------------------------------------------------------- */
+/* Resize (allocate new memory, copy overlap)                                 */
+/* -------------------------------------------------------------------------- */
+NR_PUBLIC Node* Node_Resize(Node* node, nr_intp* new_shape, int new_ndim, int copy){
+    if (!node){ NError_RaiseError(NError_ValueError, "resize: NULL node"); return NULL; }
+    if (new_ndim < 0 || new_ndim > NR_NODE_MAX_NDIM){ NError_RaiseError(NError_ValueError, "resize: invalid ndim %d", new_ndim); return NULL; }
+    nr_intp new_items = NR_NItems(new_ndim, new_shape);
+    nr_intp itemsize = NODE_ITEMSIZE(node);
+    void* new_data = malloc(new_items * itemsize);
+    if (!new_data){ NError_RaiseMemoryError(); return NULL; }
+    /* copy min(old_items, new_items) */
+    nr_intp old_items = Node_NItems(node);
+    nr_intp to_copy = old_items < new_items ? old_items : new_items;
+    if (NODE_IS_CONTIGUOUS(node)){
+        memcpy(new_data, node->data, to_copy * itemsize);
+    } else {
+        /* Use iterator copy for non-contiguous source */
+        NIter it; NIter_New(&it, node->data, node->ndim, node->shape, node->strides, NITER_MODE_STRIDED);
+        NIter_ITER(&it);
+        char* dst = (char*)new_data; nr_intp copied = 0;
+        while (NIter_NOTDONE(&it) && copied < to_copy){ memcpy(dst + copied*itemsize, NIter_ITEM(&it), itemsize); NIter_NEXT(&it); copied++; }
     }
-
-    if (node->ndim <= 1) {
-        return 0;  // No change needed for 0-D or 1-D
+    /* zero-fill remainder */
+    if (to_copy < new_items){ memset((char*)new_data + to_copy*itemsize, 0, (new_items - to_copy)*itemsize); }
+    if (_can_inplace(node, copy)){
+        if (NODE_IS_OWNDATA(node)){ free(node->data); }
+        node->data = new_data; node->flags |= NR_NODE_OWNDATA;
+        _apply_inplace(node, new_ndim, new_shape);
+        return node;
     }
-
-    nr_long temp;
-    // Reverse shape and strides
-    for (int i = 0; i < node->ndim / 2; i++) {
-        int j = node->ndim - 1 - i;
-        
-        // Swap shapes
-        temp = node->shape[i];
-        node->shape[i] = node->shape[j];
-        node->shape[j] = temp;
-
-        // Swap strides
-        temp = node->strides[i];
-        node->strides[i] = node->strides[j];
-        node->strides[j] = temp;
-    }
-
-    return 0;
-}
-
-/**
- * Swaps two axes in the node's shape.
- * For example: shape (2, 3, 4) with axes (0,2) becomes (4, 3, 2)
- * 
- * Parameters:
- *   node: The node to modify
- *   axis1: First axis to swap
- *   axis2: Second axis to swap
- * 
- * The function will:
- *   - Validate axis indices
- *   - Swap dimensions at the specified axes
- *   - Update both shape and strides arrays
- *   - No memory reallocation needed
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_SwapAxes(Node* node, int axis1, int axis2) {
-    if (!node->shape) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot swap axes of a scalar %s",
-            node->name
-        );
-        return -1;
-    }
-
-    if (axis1 == axis2) {
-        return 0;  // No swap needed
-    }
-
-    // Validate axes
-    if (axis1 < 0 || axis1 >= node->ndim || axis2 < 0 || axis2 >= node->ndim) {
-        NError_RaiseError(
-            NError_ValueError,
-            "invalid axes (%d, %d) for %s with %d dimensions",
-            axis1, axis2, node->name, node->ndim
-        );
-        return -1;
-    }
-
-    nr_long temp;
-    // Swap shapes
-    temp = node->shape[axis1];
-    node->shape[axis1] = node->shape[axis2];
-    node->shape[axis2] = temp;
-
-    // Swap strides
-    temp = node->strides[axis1];
-    node->strides[axis1] = node->strides[axis2];
-    node->strides[axis2] = temp;
-
-    return 0;
-}
-
-/**
- * Swaps multiple pairs of axes in the node's shape.
- * Allows performing multiple axis swaps in a single operation.
- * 
- * Parameters:
- *   node: The node to modify
- *   axes1: Array of first axes for each swap
- *   axes2: Array of second axes for each swap
- *   n_swaps: Number of axis pairs to swap
- * 
- * The function will:
- *   - Validate all axis pairs before performing any swaps
- *   - Perform all swaps sequentially
- *   - Skip same-axis swaps
- *   - Update both shape and strides arrays
- *   - No memory reallocation needed
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_SwapAxesMulti(Node* node, const int* axes1, const int* axes2, int n_swaps) {
-    if (NODE_IS_SCALAR(node)) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot swap axes of a scalar %s",
-            node->name
-        );
-        return -1;
-    }
-
-    if (n_swaps <= 0) {
-        return 0;  // No swaps requested
-    }
-
-    // Validate all axes pairs before performing any swaps
-    for (int i = 0; i < n_swaps; i++) {
-        int axis1 = axes1[i];
-        int axis2 = axes2[i];
-
-        if (axis1 < 0 || axis1 >= node->ndim || axis2 < 0 || axis2 >= node->ndim) {
-            NError_RaiseError(
-                NError_ValueError,
-                "invalid axes pair (%d, %d) at index %d for %s with %d dimensions",
-                axis1, axis2, i, node->name, node->ndim
-            );
-            return -1;
-        }
-    }
-
-    nr_long temp;
-    // Perform all swaps
-    for (int i = 0; i < n_swaps; i++) {
-        int axis1 = axes1[i];
-        int axis2 = axes2[i];
-
-        if (axis1 == axis2) {
-            continue;  // Skip same-axis swaps
-        }
-
-        // Swap shapes
-        temp = node->shape[axis1];
-        node->shape[axis1] = node->shape[axis2];
-        node->shape[axis2] = temp;
-
-        // Swap strides
-        temp = node->strides[axis1];
-        node->strides[axis1] = node->strides[axis2];
-        node->strides[axis2] = temp;
-    }
-
-    return 0;
-}
-
-/**
- * Performs a matrix transpose operation on a 2D node.
- * For example: shape (M, N) becomes (N, M)
- * 
- * Parameters:
- *   node: The node to transpose (must be 2-dimensional)
- * 
- * The function will:
- *   - Verify the node is 2-dimensional
- *   - Swap dimensions and strides for the 2D matrix
- *   - No memory reallocation needed
- * 
- * Returns:
- *   0 on success, -1 on error
- */
-NR_PUBLIC int
-Node_MatrixTranspose(Node* node) {
-    if (NODE_IS_SCALAR(node)) {
-        NError_RaiseError(
-            NError_ValueError,
-            "cannot transpose a scalar %s",
-            node->name
-        );
-        return -1;
-    }
-
-    if (node->ndim != 2) {
-        NError_RaiseError(
-            NError_ValueError,
-            "matrix transpose requires 2 dimensions, got %d for %s",
-            node->ndim, node->name
-        );
-        return -1;
-    }
-
-    nr_long temp;
-    // Swap shapes
-    temp = node->shape[0];
-    node->shape[0] = node->shape[1];
-    node->shape[1] = temp;
-
-    // Swap strides
-    temp = node->strides[0];
-    node->strides[0] = node->strides[1];
-    node->strides[1] = temp;
-
-    return 0;
+    Node* out = Node_New(new_data, 1, new_ndim, new_shape, NODE_DTYPE(node));
+    return out;
 }

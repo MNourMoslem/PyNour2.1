@@ -3,46 +3,22 @@
 
 #include "nour/nour.h"
 
-/**
- * Reshapes a node to new dimensions while preserving total elements.
- * Returns 0 on success, -1 on error.
+/* Expanded shape transformation API.
+ * All functions return a Node* (view or modified in-place) on success, NULL on error.
+ * Argument 'copy': if non-zero and the node refcount == 1, operation is performed in-place.
+ * Otherwise a new view (or new allocation for resize) is returned.
  */
-NR_PUBLIC int
-Node_Reshape(Node* node, nr_long* new_shp, int new_ndim);
-
-/**
- * Removes all dimensions of size 1 from the node's shape.
- * Returns 0 on success, -1 on error.
- */
-NR_PUBLIC int
-Node_Squeeze(Node* node);
-
-/**
- * Reverses the order of all dimensions in the node.
- * Returns 0 on success, -1 on error.
- */
-NR_PUBLIC int
-Node_Transpose(Node* node);
-
-/**
- * Swaps two specified axes in the node's shape.
- * Returns 0 on success, -1 on error.
- */
-NR_PUBLIC int
-Node_SwapAxes(Node* node, int axis1, int axis2);
-
-/**
- * Swaps multiple pairs of axes in the node's shape.
- * Returns 0 on success, -1 on error.
- */
-NR_PUBLIC int
-Node_SwapAxesMulti(Node* node, const int* axes1, const int* axes2, int n_swaps);
-
-/**
- * Performs matrix transpose on a 2D node.
- * Returns 0 on success, -1 on error.
- */
-NR_PUBLIC int
-Node_MatrixTranspose(Node* node);
+NR_PUBLIC Node* Node_Reshape(Node* node, nr_intp* new_shape, int new_ndim, int copy);
+NR_PUBLIC Node* Node_Ravel(Node* node, int copy);
+NR_PUBLIC Node* Node_Flatten(Node* node, int copy);
+NR_PUBLIC Node* Node_MoveAxis(Node* node, int src_axis, int dst_axis, int copy);
+NR_PUBLIC Node* Node_RollAxis(Node* node, int axis, int start, int copy);
+NR_PUBLIC Node* Node_SwapAxes(Node* node, int axis1, int axis2, int copy);
+NR_PUBLIC Node* Node_Transpose(Node* node, int copy);
+NR_PUBLIC Node* Node_PermuteDims(Node* node, const int* order, int copy);
+NR_PUBLIC Node* Node_MatrixTranspose(Node* node, int copy);
+NR_PUBLIC Node* Node_ExpandDims(Node* node, int axis, int copy);
+NR_PUBLIC Node* Node_Squeeze(Node* node, int copy);
+NR_PUBLIC Node* Node_Resize(Node* node, nr_intp* new_shape, int new_ndim, int copy);
 
 #endif
