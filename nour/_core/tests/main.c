@@ -41,6 +41,7 @@ void run_all_tests(TestFunc* tests, const char* test_title, int num_tests) {
 int main() {
     test_basic();
     test_index();
+    test_reduce();
     // Add calls to other test suites here as needed
     return 0;
 }

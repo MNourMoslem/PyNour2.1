@@ -19,6 +19,7 @@ void run_all_tests(TestFunc* tests, const char* test_title, int num_tests);
 
 void test_basic();
 void test_index();
+void test_reduce();
 
 
 #endif // NOUR__CORE_TESTS_MAIN_H
