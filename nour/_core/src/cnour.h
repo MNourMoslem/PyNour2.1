@@ -12,6 +12,7 @@
 #include "node2str.h"
 #include "shape.h"
 #include "index.h"
+#include "nfunc.h"
 #include "./nmath/nmath.h"
 
 #endif // NOUR__CORE_SRC_CNOUR_H
