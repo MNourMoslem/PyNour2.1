@@ -2,6 +2,7 @@
 #define NOUR__CORE_SRC_NMATH_NMATH_H
 
 #include "nour/nr_node.h"
+#include "reduce.h"
 
 NR_PUBLIC Node* NMath_Add(Node* c, Node* b, Node* a);
 NR_PUBLIC Node* NMath_Sub(Node* c, Node* b, Node* a);
@@ -54,12 +55,6 @@ NR_PUBLIC Node* NMath_Rint(Node* c, Node* a);
 NR_PUBLIC int NMath_Frexp(Node** mantissa, Node** exponent, Node* a);
 NR_PUBLIC Node* NMath_Ldexp(Node* c, Node* mantissa, Node* exponent);
 NR_PUBLIC int NMath_Modf(Node** fractional, Node** integer, Node* a);
-
-// Reductions (scalar outputs)
-NR_PUBLIC Node* NMath_Sum(Node* c, Node* a);
-NR_PUBLIC Node* NMath_Prod(Node* c, Node* a);
-NR_PUBLIC Node* NMath_Min(Node* c, Node* a);
-NR_PUBLIC Node* NMath_Max(Node* c, Node* a);
 
 
 #endif // NOUR__CORE_SRC_NMATH_NMATH_H
