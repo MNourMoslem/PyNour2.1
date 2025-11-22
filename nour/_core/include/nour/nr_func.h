@@ -78,5 +78,6 @@ typedef struct
 #define NFUNC_FLAG_TYPE_BROADCASTABLE 0x20  // Function supports type broadcasting
 #define NFUNC_FLAG_OUT_DTYPES_NOT_SAME 0x40 // If there are multiple output nodes, their dtypes may differ
 #define NFUNC_FLAG_NO_USER_OUT_NODES 0x80   // Function does not allow user-provided output nodes
+#define NFUNC_FLAG_NO_DATA 0x100            // Function does not modify node data buffer (shape/strides metadata only)
 
 #endif

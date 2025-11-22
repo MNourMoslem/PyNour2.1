@@ -391,6 +391,42 @@ NFunc_Call(const NFunc* nfunc, NFuncArgs* args){
         return -1;
     }
 
+    /* Fast path for metadata-only functions that must not touch data buffers. */
+    if (nfunc->flags & NFUNC_FLAG_NO_DATA){
+        /* Enforce in-place semantics if declared; out node must be NULL or same pointer. */
+        if (args->nout == 1){
+            Node* in = args->in_nodes[0];
+            Node* out = args->out_nodes[0];
+            if (out && out != in){
+                NError_RaiseError(
+                    NError_ValueError,
+                    "%s: NO_DATA functions require output node to be same as input or NULL",
+                    nfunc->name
+                );
+                return -1;
+            }
+            if (!out){
+                args->out_nodes[0] = in; /* implicit in-place */
+            }
+        }
+        /* Assign dtype pass-through. */
+        if (args->nin > 0 && args->in_nodes[0]){
+            args->outtype = NODE_DTYPE(args->in_nodes[0]);
+        } else {
+            args->outtype = NR_NONE;
+        }
+
+        int result = nfunc->func(args);
+        if (result < 0){
+            return -1;
+        }
+        /* Tracking still allowed. */
+        if (track_out_node_if_needed(nfunc, args) < 0){
+            return -1;
+        }
+        return result;
+    }
+
     NR_DTYPE in_dtype = -1;
     NR_DTYPE out_dtype = -1;
     if (understand_dtypes(nfunc, args, &in_dtype, &out_dtype) < 0){
