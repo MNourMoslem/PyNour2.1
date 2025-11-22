@@ -21,6 +21,7 @@ void test_basic();
 void test_index();
 void test_reduce();
 void test_cumulative();
+void test_shape();
 
 
 #endif // NOUR__CORE_TESTS_MAIN_H

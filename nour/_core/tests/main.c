@@ -43,6 +43,7 @@ int main() {
     test_index();
     test_reduce();
     test_cumulative();
+    test_shape();
     // Add calls to other test suites here as needed
     return 0;
 }
