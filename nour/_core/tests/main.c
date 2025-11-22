@@ -42,6 +42,7 @@ int main() {
     test_basic();
     test_index();
     test_reduce();
+    test_cumulative();
     // Add calls to other test suites here as needed
     return 0;
 }
