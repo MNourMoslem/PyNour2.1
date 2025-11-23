@@ -864,7 +864,7 @@ int test_index_mixed_node_slice() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx);
-    NIndexRuleSet_AddSlice(&rs, 1, 4, 1);  // Slice second dimension
+    NIndexRuleSet_AddSlice(&rs, 1, 4, 1);   // Slice second dimension
     Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
@@ -1750,6 +1750,230 @@ int test_index_string_step_only() {
 }
 
 // ============================================================================
+// SET TESTS
+// ============================================================================
+
+int test_set_int_1d() {
+    Node* n1;
+    nr_intp shape[1] = {10};
+    TEST_NEW_NODE_INT(n1, 10, 1, shape);
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddInt(&rs, 3);
+    
+    // Set value at index 3 to 99
+    if (Node_SetLong(n1, &rs, 99) < 0) {
+        printf("Node_SetLong failed\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    // Verify
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[3] != 99) {
+        printf("Expected 99 at index 3, got %lld\n", data[3]);
+        Node_Free(n1);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    return 1;
+}
+
+int test_set_slice_1d() {
+    Node* n1;
+    nr_intp shape[1] = {10};
+    TEST_NEW_NODE_INT(n1, 10, 1, shape);
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddSlice(&rs, 2, 5, 1); // [2:5] -> indices 2, 3, 4
+    
+    // Set slice to scalar 55
+    if (Node_SetLong(n1, &rs, 55) < 0) {
+        printf("Node_SetLong failed for slice\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    // Verify
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[2] != 55 || data[3] != 55 || data[4] != 55) {
+        printf("Slice set failed. Got %lld, %lld, %lld\n", data[2], data[3], data[4]);
+        Node_Free(n1);
+        return 0;
+    }
+    if (data[1] != 1 || data[5] != 5) { // Check boundaries untouched
+        printf("Slice set affected neighbors\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    return 1;
+}
+
+int test_set_fancy_1d() {
+    Node* n1;
+    nr_intp shape[1] = {10};
+    TEST_NEW_NODE_INT(n1, 10, 1, shape);
+    
+    // Create index node [1, 5, 8]
+    Node* idx;
+    nr_intp idx_shape[1] = {3};
+    idx = Node_NewEmpty(1, idx_shape, NR_INT64);
+    nr_int64* idx_data = (nr_int64*)NODE_DATA(idx);
+    idx_data[0] = 1; idx_data[1] = 5; idx_data[2] = 8;
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddNode(&rs, idx);
+    
+    // Set to scalar 77
+    if (Node_SetLong(n1, &rs, 77) < 0) {
+        printf("Node_SetLong failed for fancy index\n");
+        Node_Free(n1);
+        Node_Free(idx);
+        return 0;
+    }
+    
+    // Verify
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[1] != 77 || data[5] != 77 || data[8] != 77) {
+        printf("Fancy set failed\n");
+        Node_Free(n1);
+        Node_Free(idx);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    Node_Free(idx);
+    return 1;
+}
+
+int test_set_array_broadcast() {
+    Node* n1;
+    nr_intp shape[1] = {10};
+    // Use Node_NewEmpty to avoid stack memory issues and ensure ownership is clear
+    n1 = Node_NewEmpty(1, shape, NR_INT32);
+    nr_int* n1_data = (nr_int*)NODE_DATA(n1);
+    for(int i=0; i<10; i++) n1_data[i] = i;
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddSlice(&rs, 0, 3, 1); // [0:3]
+    
+    // Create source array [100, 200, 300]
+    int32_t* src_data = malloc(3 * sizeof(int32_t));
+    src_data[0] = 100; src_data[1] = 200; src_data[2] = 300;
+    nr_intp src_shape[] = {3};
+    nr_intp src_strides[] = {sizeof(int32_t)};
+    
+    if (Node_SetArray(n1, &rs, src_data, 1, src_shape, src_strides, NR_INT32) < 0) {
+        printf("Node_SetArray failed\n");
+        free(src_data);
+        Node_Free(n1);
+        return 0;
+    }
+    free(src_data);
+    
+    // Verify
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[0] != 100 || data[1] != 200 || data[2] != 300) {
+        printf("Array set failed: %d %d %d\n", data[0], data[1], data[2]);
+        Node_Free(n1);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    return 1;
+}
+
+int test_set_type_cast() {
+    Node* n1;
+    nr_intp shape[1] = {5};
+    TEST_NEW_NODE_INT(n1, 5, 1, shape); // INT64 array
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddInt(&rs, 0);
+    
+    // Set using Float (should cast)
+    if (Node_SetFloat(n1, &rs, 3.14f) < 0) {
+        printf("Node_SetFloat failed with cast\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    // Verify (3.14 -> 3)
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[0] != 3) {
+        printf("Type cast failed. Expected 3, got %lld\n", data[0]);
+        Node_Free(n1);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    return 1;
+}
+
+int test_set_bool_mask() {
+    Node* n1;
+    nr_intp shape[1] = {5};
+    TEST_NEW_NODE_INT(n1, 5, 1, shape); // 0, 1, 2, 3, 4
+    
+    // Create bool mask [T, F, T, F, T]
+    Node* mask;
+    nr_intp mask_shape[1] = {5};
+    mask = Node_NewEmpty(1, mask_shape, NR_BOOL);
+    nr_bool* mdata = (nr_bool*)NODE_DATA(mask);
+    mdata[0]=1; mdata[1]=0; mdata[2]=1; mdata[3]=0; mdata[4]=1;
+    
+    NIndexRuleSet rs = NIndexRuleSet_New();
+    NIndexRuleSet_AddNode(&rs, mask);
+    
+    // Set masked elements to 0
+    if (Node_SetLong(n1, &rs, 0) < 0) {
+        printf("Node_SetLong failed for bool mask\n");
+        Node_Free(n1);
+        Node_Free(mask);
+        return 0;
+    }
+    
+    // Verify: 0, 1, 0, 3, 0
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[0]!=0 || data[1]!=1 || data[2]!=0 || data[3]!=3 || data[4]!=0) {
+        printf("Bool mask set failed\n");
+        Node_Free(n1);
+        Node_Free(mask);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    Node_Free(mask);
+    return 1;
+}
+
+int test_set_no_rules() {
+    Node* n1;
+    nr_intp shape[1] = {3};
+    TEST_NEW_NODE_INT(n1, 3, 1, shape); // 0, 1, 2
+    
+    // Set whole array to 5
+    if (Node_SetLong(n1, NULL, 5) < 0) {
+        printf("Node_SetLong failed for no rules\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    nr_int* data = (nr_int*)NODE_DATA(n1);
+    if (data[0]!=5 || data[1]!=5 || data[2]!=5) {
+        printf("No rules set failed\n");
+        Node_Free(n1);
+        return 0;
+    }
+    
+    Node_Free(n1);
+    return 1;
+}
+
+// ============================================================================
 // MAIN TEST RUNNER
 // ============================================================================
 
@@ -1838,6 +2062,15 @@ void test_getset() {
         test_index_string_empty,
         test_index_string_only_brackets,
         test_index_string_step_only,
+
+        // SET tests
+        test_set_int_1d,
+        test_set_slice_1d,
+        test_set_fancy_1d,
+        test_set_array_broadcast,
+        test_set_type_cast,
+        test_set_bool_mask,
+        test_set_no_rules,
     };
     
     int num_tests = sizeof(tests) / sizeof(tests[0]);
