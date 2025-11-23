@@ -87,7 +87,7 @@ Node_NewAdvanced(void* data, int own_data, int ndim, nr_intp* shape,
         node->flags |= NR_NODE_OWNDATA;
     }
     if (ndim == 0){
-        node->flags = NR_NODE_SCALAR;
+        node->flags |= NR_NODE_SCALAR;
     }
 
     return node;
