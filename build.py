@@ -128,7 +128,7 @@ class BuildSystem:
             
             cmd = [
                 "gcc", "-c", str(c_file), "-o", str(obj_file), 
-                "-fPIC", "-Wall", "-Wextra"
+                "-fPIC", "-Wall", "-Wextra", "-g"
             ] + include_flags
             
             print(f"  Compiling: {c_file.name}")
