@@ -1320,3 +1320,41 @@ Node_RiskySet(Node* base_node, NIndexRuleSet* rs, Node* value)
     
     return result;
 }
+
+/* ============================================================================
+ * Set Helpers & Shortcuts
+ * ============================================================================ */
+
+NR_PUBLIC int
+Node_SetNumber(Node* base_node, NIndexRuleSet* rs, void* num, NR_DTYPE dtype)
+{
+    Node* scalar = Node_NewScalar(num, dtype);
+    if (!scalar) return -1;
+    int result = Node_Set(base_node, rs, scalar);
+    Node_Free(scalar);
+    return result;
+}
+
+NR_PUBLIC int
+Node_SetArray(Node* base_node, NIndexRuleSet* rs, void* data, int ndim, nr_intp* shape, nr_intp* strides, NR_DTYPE dtype)
+{
+    /* Create a view of the data (copy_data=0) */
+    Node* value_node = Node_NewAdvanced(data, 0, ndim, shape, strides, dtype, 0, NULL);
+    if (!value_node) {
+        return -1;
+    }
+    
+    int result = Node_Set(base_node, rs, value_node);
+    
+    /* Node_NewAdvanced with copy_data=0 does not own the data, so Node_Free will just free the struct */
+    Node_Free(value_node);
+    return result;
+}
+
+NR_PUBLIC int Node_SetBool(Node* n, NIndexRuleSet* rs, nr_bool val) { return Node_SetNumber(n, rs, &val, NR_BOOL); }
+NR_PUBLIC int Node_SetByte(Node* n, NIndexRuleSet* rs, nr_byte val) { return Node_SetNumber(n, rs, &val, NR_UINT8); }
+NR_PUBLIC int Node_SetShort(Node* n, NIndexRuleSet* rs, nr_int16 val) { return Node_SetNumber(n, rs, &val, NR_INT16); }
+NR_PUBLIC int Node_SetInt(Node* n, NIndexRuleSet* rs, nr_int32 val) { return Node_SetNumber(n, rs, &val, NR_INT32); }
+NR_PUBLIC int Node_SetLong(Node* n, NIndexRuleSet* rs, nr_long val) { return Node_SetNumber(n, rs, &val, NR_INT64); }
+NR_PUBLIC int Node_SetFloat(Node* n, NIndexRuleSet* rs, nr_float32 val) { return Node_SetNumber(n, rs, &val, NR_FLOAT32); }
+NR_PUBLIC int Node_SetDouble(Node* n, NIndexRuleSet* rs, nr_float64 val) { return Node_SetNumber(n, rs, &val, NR_FLOAT64); }

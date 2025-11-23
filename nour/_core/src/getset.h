@@ -94,6 +94,19 @@ NR_PUBLIC Node* Node_RiskyGet(Node* base_node, NIndexRuleSet* rs);
 NR_PUBLIC int Node_Set(Node* base_node, NIndexRuleSet* rs, Node* value);
 NR_PUBLIC int Node_RiskySet(Node* base_node, NIndexRuleSet* rs, Node* value);
 
+// Set helpers
+NR_PUBLIC int Node_SetNumber(Node* base_node, NIndexRuleSet* rs, void* num, NR_DTYPE dtype);
+NR_PUBLIC int Node_SetArray(Node* base_node, NIndexRuleSet* rs, void* data, int ndim, nr_intp* shape, nr_intp* strides, NR_DTYPE dtype);
+
+// Set shortcuts
+NR_PUBLIC int Node_SetBool(Node* n, NIndexRuleSet* rs, nr_bool val);
+NR_PUBLIC int Node_SetByte(Node* n, NIndexRuleSet* rs, nr_byte val);
+NR_PUBLIC int Node_SetShort(Node* n, NIndexRuleSet* rs, nr_int16 val);
+NR_PUBLIC int Node_SetInt(Node* n, NIndexRuleSet* rs, nr_int32 val);
+NR_PUBLIC int Node_SetLong(Node* n, NIndexRuleSet* rs, nr_long val);
+NR_PUBLIC int Node_SetFloat(Node* n, NIndexRuleSet* rs, nr_float32 val);
+NR_PUBLIC int Node_SetDouble(Node* n, NIndexRuleSet* rs, nr_float64 val);
+
 // Macros to access structs members
 
 #define NIndexSlice_START(slice) ((slice).start)
