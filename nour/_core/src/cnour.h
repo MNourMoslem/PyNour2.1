@@ -11,7 +11,7 @@
 #include "tc_methods.h"
 #include "node2str.h"
 #include "shape.h"
-#include "index.h"
+#include "getset.h"
 #include "nfunc.h"
 #include "./nmath/nmath.h"
 

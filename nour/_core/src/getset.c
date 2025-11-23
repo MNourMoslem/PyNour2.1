@@ -1,7 +1,6 @@
 #include "nour/nour.h"
-#include "index.h"
 #include "nfunc.h"
-#include "index.h"
+#include "getset.h"
 #include "nerror.h"
 #include "node_core.h"
 #include "free.h"
@@ -1043,7 +1042,7 @@ set_no_rules_indexing(Node* base_node, Node* value)
 }
 
 /* ============================================================================
- * Public API: Node_Index (GET operation)
+ * Public API: Node_Get (GET operation)
  * ============================================================================ */
 
 NR_STATIC_INLINE Node*
@@ -1149,7 +1148,7 @@ const NFunc getitem_nfunc = {
 };
 
 NR_PUBLIC Node*
-Node_Index(Node* base_node, NIndexRuleSet* rs)
+Node_Get(Node* base_node, NIndexRuleSet* rs)
 {
     IndexOpArgs args = {rs, 0};
     NFuncArgs* fargs = NFuncArgs_New(1, 1);
@@ -1165,7 +1164,7 @@ Node_Index(Node* base_node, NIndexRuleSet* rs)
 }
 
 NR_PUBLIC Node*
-Node_RiskyIndex(Node* base_node, NIndexRuleSet* rs)
+Node_RiskyGet(Node* base_node, NIndexRuleSet* rs)
 {
     IndexOpArgs args = {rs, 1};
     NFuncArgs* fargs = NFuncArgs_New(1, 1);

@@ -89,8 +89,8 @@ NR_PUBLIC int
 NIndexRuleSet_AddRange(NIndexRuleSet* rs, nr_intp start, nr_intp stop);
 
 // Core get/set operations
-NR_PUBLIC Node* Node_Index(Node* base_node, NIndexRuleSet* rs);
-NR_PUBLIC Node* Node_RiskyIndex(Node* base_node, NIndexRuleSet* rs);
+NR_PUBLIC Node* Node_Get(Node* base_node, NIndexRuleSet* rs);
+NR_PUBLIC Node* Node_RiskyGet(Node* base_node, NIndexRuleSet* rs);
 NR_PUBLIC int Node_Set(Node* base_node, NIndexRuleSet* rs, Node* value);
 NR_PUBLIC int Node_RiskySet(Node* base_node, NIndexRuleSet* rs, Node* value);
 

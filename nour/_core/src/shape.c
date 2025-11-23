@@ -188,7 +188,7 @@ NR_PUBLIC Node* Node_MoveAxis(Node* node, int src_axis, int dst_axis, int copy){
     for (int i=ndim-1;i>=dst_axis;i--){ order[i] = order[i-1]; }
     order[dst_axis] = src_axis; /* This algorithm ensures insertion at dst_axis */
     /* But adjust: simpler approach build new order manually */
-    j=0; int k=0; int tmp_order[NR_NODE_MAX_NDIM];
+    j=0; int tmp_order[NR_NODE_MAX_NDIM];
     for (int i=0;i<ndim;i++){ tmp_order[i] = -1; }
     for (int i=0;i<ndim;i++){ if (i==src_axis) continue; tmp_order[j++] = i; }
     /* insert src_axis at dst_axis */
@@ -213,7 +213,6 @@ NR_PUBLIC Node* Node_RollAxis(Node* node, int axis, int start, int copy){
     }
     /* axis > start: move backwards */
     int order[NR_NODE_MAX_NDIM];
-    int idx=0;
     for (int i=0;i<ndim;i++){ order[i] = i; }
     while (axis > start){
         int a = order[axis-1];

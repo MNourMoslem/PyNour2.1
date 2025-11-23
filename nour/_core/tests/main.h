@@ -18,7 +18,7 @@ void run_all_tests(TestFunc* tests, const char* test_title, int num_tests);
 
 
 void test_basic();
-void test_index();
+void test_getset();
 void test_reduce();
 void test_cumulative();
 void test_shape();

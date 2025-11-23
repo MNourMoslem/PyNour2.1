@@ -40,7 +40,7 @@ void run_all_tests(TestFunc* tests, const char* test_title, int num_tests) {
 
 int main() {
     test_basic();
-    test_index();
+    test_getset();
     test_reduce();
     test_cumulative();
     test_shape();

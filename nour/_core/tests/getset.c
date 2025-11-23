@@ -44,7 +44,7 @@ int test_index_int_1d_positive() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 3);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -73,7 +73,7 @@ int test_index_int_1d_negative() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, -2);  // Should index element 8
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -102,7 +102,7 @@ int test_index_int_2d_single() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -126,7 +126,7 @@ int test_index_int_2d_both() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 2);
     NIndexRuleSet_AddInt(&rs, 3);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -155,7 +155,7 @@ int test_index_int_3d() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -177,7 +177,7 @@ int test_index_int_out_of_bounds() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 10);  // Out of bounds
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     if (indexed) {
         printf("Expected indexing to fail for out of bounds index.\n");
         Node_Free(n1);
@@ -200,7 +200,7 @@ int test_index_slice_1d_basic() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 2, 7, 1);  // [2:7:1]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -223,7 +223,7 @@ int test_index_slice_1d_step() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 0, 10, 2);  // [0:10:2]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -246,7 +246,7 @@ int test_index_slice_1d_negative_step() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 8, 2, -2);  // [8:2:-2]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -269,7 +269,7 @@ int test_index_slice_1d_negative_indices() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, -8, -2, 1);  // [-8:-2:1] = [2:8:1]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -292,7 +292,7 @@ int test_index_slice_2d_first_dim() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 1, 4, 1);  // [1:4]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -315,7 +315,7 @@ int test_index_slice_2d_both_dims() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 1, 4, 1);   // [1:4]
     NIndexRuleSet_AddSlice(&rs, 2, 5, 1);   // [2:5]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -337,7 +337,7 @@ int test_index_slice_step_zero() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 0, 5, 0);  // Step cannot be zero
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (indexed) {
         printf("Expected indexing to fail for zero step.\n");
@@ -362,7 +362,7 @@ int test_index_mixed_int_slice() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 2);           // Fix first dimension
     NIndexRuleSet_AddSlice(&rs, 1, 4, 1);   // Slice second dimension
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -385,7 +385,7 @@ int test_index_mixed_slice_int() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 0, 3, 1);   // Slice first dimension
     NIndexRuleSet_AddInt(&rs, 2);           // Fix second dimension
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -409,7 +409,7 @@ int test_index_mixed_alternating() {
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddSlice(&rs, 1, 3, 1);
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -435,7 +435,7 @@ int test_index_newaxis_front() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNewAxis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -459,7 +459,7 @@ int test_index_newaxis_middle() {
     NIndexRuleSet_AddSlice(&rs, 0, 3, 1);
     NIndexRuleSet_AddNewAxis(&rs);
     NIndexRuleSet_AddSlice(&rs, 0, 4, 1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -482,7 +482,7 @@ int test_index_newaxis_multiple() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNewAxis(&rs);
     NIndexRuleSet_AddNewAxis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -505,7 +505,7 @@ int test_index_newaxis_with_int() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddNewAxis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -532,7 +532,7 @@ int test_index_ellipsis_front() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddEllipsis(&rs);
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -556,7 +556,7 @@ int test_index_ellipsis_middle() {
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddEllipsis(&rs);
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -579,7 +579,7 @@ int test_index_ellipsis_back() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddEllipsis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -602,7 +602,7 @@ int test_index_ellipsis_multiple_error() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddEllipsis(&rs);
     NIndexRuleSet_AddEllipsis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (indexed) {
         printf("Expected indexing to fail for multiple ellipses.\n");
@@ -635,7 +635,7 @@ int test_index_node_1d_simple() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -669,7 +669,7 @@ int test_index_node_2d_single_axis() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -709,7 +709,7 @@ int test_index_node_2d_both_axes() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx0);
     NIndexRuleSet_AddNode(&rs, idx1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -755,7 +755,7 @@ int test_index_node_broadcasting() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx0);
     NIndexRuleSet_AddNode(&rs, idx1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -794,7 +794,7 @@ int test_index_bool_1d() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, bool_idx);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -828,7 +828,7 @@ int test_index_bool_2d() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, bool_idx);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -865,7 +865,7 @@ int test_index_mixed_node_slice() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx);
     NIndexRuleSet_AddSlice(&rs, 1, 4, 1);  // Slice second dimension
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -899,7 +899,7 @@ int test_index_mixed_node_int() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx);
     NIndexRuleSet_AddInt(&rs, 2);  // Fix second dimension
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -933,7 +933,7 @@ int test_index_mixed_slice_node_slice() {
     NIndexRuleSet_AddSlice(&rs, 0, 2, 1);   // Slice first dimension
     NIndexRuleSet_AddNode(&rs, idx);         // Fancy index second
     NIndexRuleSet_AddSlice(&rs, 2, 5, 1);   // Slice third dimension
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -961,7 +961,7 @@ int test_index_empty_slice() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 5, 5, 1);  // Empty slice
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -984,7 +984,7 @@ int test_index_full_slice() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddFullSlice(&rs);
     NIndexRuleSet_AddFullSlice(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
 
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1006,7 +1006,7 @@ int test_index_range() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddRange(&rs, 3, 8);  // [3:8]
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1031,7 +1031,7 @@ int test_index_too_many_indices() {
     NIndexRuleSet_AddInt(&rs, 0);
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddInt(&rs, 2);  // Too many indices
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (indexed) {
         printf("Expected indexing to fail for too many indices.\n");
@@ -1053,7 +1053,7 @@ int test_index_scalar_node() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 0);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1084,7 +1084,7 @@ int test_index_high_dimensional() {
     NIndexRuleSet_AddInt(&rs, 1);
     NIndexRuleSet_AddSlice(&rs, 0, 2, 1);
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1108,7 +1108,7 @@ int test_index_contiguous_check() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 1, 4, 1);
     NIndexRuleSet_AddSlice(&rs, 0, 6, 1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1143,7 +1143,7 @@ int test_index_copy_needed() {
     // Integer indexing requires copy
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddInt(&rs, 2);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1165,7 +1165,7 @@ int test_index_large_step() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSlice(&rs, 0, 100, 10);  // Every 10th element
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1188,7 +1188,7 @@ int test_index_negative_step_full() {
     
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddSliceAdvanced(&rs, 0, 0, -1, 0, 0);  // Reverse the array
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1227,7 +1227,7 @@ int test_index_complex_fancy() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx0);
     NIndexRuleSet_AddNode(&rs, idx1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1255,7 +1255,7 @@ int test_index_newaxis_ellipsis_combination() {
     NIndexRuleSet_AddNewAxis(&rs);
     NIndexRuleSet_AddEllipsis(&rs);
     NIndexRuleSet_AddNewAxis(&rs);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1291,7 +1291,7 @@ int test_index_single_element_fancy() {
     NIndexRuleSet rs = NIndexRuleSet_New();
     NIndexRuleSet_AddNode(&rs, idx0);
     NIndexRuleSet_AddNode(&rs, idx1);
-    Node* indexed = Node_Index(n1, &rs);
+    Node* indexed = Node_Get(n1, &rs);
     
     if (!indexed) {
         printf("Indexing failed.\n");
@@ -1753,7 +1753,7 @@ int test_index_string_step_only() {
 // MAIN TEST RUNNER
 // ============================================================================
 
-void test_index() {
+void test_getset() {
     TestFunc tests[] = {
         // Integer indexing tests
         test_index_int_1d_positive,
