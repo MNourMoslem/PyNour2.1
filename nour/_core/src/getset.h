@@ -100,10 +100,14 @@ NR_PUBLIC int Node_SetArray(Node* base_node, NIndexRuleSet* rs, void* data, int 
 
 // Set shortcuts
 NR_PUBLIC int Node_SetBool(Node* n, NIndexRuleSet* rs, nr_bool val);
-NR_PUBLIC int Node_SetByte(Node* n, NIndexRuleSet* rs, nr_byte val);
+NR_PUBLIC int Node_SetByte(Node* n, NIndexRuleSet* rs, nr_int8 val);
+NR_PUBLIC int Node_SetUByte(Node* n, NIndexRuleSet* rs, nr_uint8 val);
 NR_PUBLIC int Node_SetShort(Node* n, NIndexRuleSet* rs, nr_int16 val);
+NR_PUBLIC int Node_SetUShort(Node* n, NIndexRuleSet* rs, nr_uint16 val);
 NR_PUBLIC int Node_SetInt(Node* n, NIndexRuleSet* rs, nr_int32 val);
-NR_PUBLIC int Node_SetLong(Node* n, NIndexRuleSet* rs, nr_long val);
+NR_PUBLIC int Node_SetUInt(Node* n, NIndexRuleSet* rs, nr_uint32 val);
+NR_PUBLIC int Node_SetLong(Node* n, NIndexRuleSet* rs, nr_int64 val);
+NR_PUBLIC int Node_SetULong(Node* n, NIndexRuleSet* rs, nr_uint64 val);
 NR_PUBLIC int Node_SetFloat(Node* n, NIndexRuleSet* rs, nr_float32 val);
 NR_PUBLIC int Node_SetDouble(Node* n, NIndexRuleSet* rs, nr_float64 val);
 
